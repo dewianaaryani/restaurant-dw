@@ -1,18 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Select,
   SelectContent,
@@ -22,592 +16,380 @@ import {
 } from "@/components/ui/select";
 import {
   Search,
-  Eye,
-  CheckCircle,
-  Clock,
-  AlertCircle,
-  XCircle,
-  Download,
-  DollarSign,
+  Shield,
+  Users,
+  ChefHat,
+  CreditCard,
+  User,
+  Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
 
-interface OrderItem {
-  id: number;
-  order_id: string;
-  menu_id: string;
-  menu_name: string;
-  price: number;
-  quantity: number;
-  subtotal: number;
-  customization?: string;
+enum Role {
+  admin = "admin",
+  cashier = "cashier",
+  kitchen = "kitchen",
+  customer = "customer",
 }
 
-interface Order {
+interface UserInterface {
   id: number;
-  customer_id: string;
-  customer_name: string;
-  customer_email: string;
-  table_number: number;
-  order_status: string;
-  payment_status: string;
-  total_amount: number;
-  order_time: string;
-  completed_time?: string;
-  kasir_id?: string;
-  items: OrderItem[];
+  name: string;
+  email: string;
+  role: Role;
+  created_at: string;
+  updated_at: string;
+  lastLogin?: string;
 }
 
-export default function OrderManagement() {
-  const [orders, setOrders] = useState<Order[]>([
-    {
-      id: 1,
-      customer_id: "1",
-      customer_name: "John Doe",
-      customer_email: "john@example.com",
-      table_number: 5,
-      order_status: "completed",
-      payment_status: "paid",
-      total_amount: 65.0,
-      order_time: "2024-01-15T19:30:00Z",
-      completed_time: "2024-01-15T20:15:00Z",
-      kasir_id: "4",
-      items: [
-        {
-          id: 1,
-          order_id: "1",
-          menu_id: "1",
-          menu_name: "Grilled Salmon",
-          price: 28.0,
-          quantity: 1,
-          subtotal: 28.0,
-        },
-        {
-          id: 2,
-          order_id: "1",
-          menu_id: "4",
-          menu_name: "House Wine",
-          price: 15.0,
-          quantity: 2,
-          subtotal: 30.0,
-        },
-        {
-          id: 3,
-          order_id: "1",
-          menu_id: "8",
-          menu_name: "Chocolate Cake",
-          price: 7.0,
-          quantity: 1,
-          subtotal: 7.0,
-        },
-      ],
-    },
-    {
-      id: 2,
-      customer_id: "2",
-      customer_name: "Jane Smith",
-      customer_email: "jane@example.com",
-      table_number: 2,
-      order_status: "preparing",
-      payment_status: "pending",
-      total_amount: 78.5,
-      order_time: "2024-01-15T20:15:00Z",
-      items: [
-        {
-          id: 4,
-          order_id: "2",
-          menu_id: "2",
-          menu_name: "Beef Wellington",
-          price: 45.0,
-          quantity: 1,
-          subtotal: 45.0,
-        },
-        {
-          id: 5,
-          order_id: "2",
-          menu_id: "5",
-          menu_name: "Caesar Salad",
-          price: 16.0,
-          quantity: 1,
-          subtotal: 16.0,
-        },
-        {
-          id: 6,
-          order_id: "2",
-          menu_id: "6",
-          menu_name: "Red Wine",
-          price: 17.5,
-          quantity: 1,
-          subtotal: 17.5,
-        },
-      ],
-    },
-    {
-      id: 3,
-      customer_id: "3",
-      customer_name: "Mike Johnson",
-      customer_email: "mike@example.com",
-      table_number: 8,
-      order_status: "pending",
-      payment_status: "pending",
-      total_amount: 38.0,
-      order_time: "2024-01-15T20:45:00Z",
-      items: [
-        {
-          id: 7,
-          order_id: "3",
-          menu_id: "3",
-          menu_name: "Truffle Risotto",
-          price: 32.0,
-          quantity: 1,
-          subtotal: 32.0,
-          customization: "Extra truffle",
-        },
-        {
-          id: 8,
-          order_id: "3",
-          menu_id: "7",
-          menu_name: "Garlic Bread",
-          price: 6.0,
-          quantity: 1,
-          subtotal: 6.0,
-        },
-      ],
-    },
-  ]);
+interface ApiResponse {
+  users: UserInterface[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
 
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+const userTypes = [
+  {
+    value: Role.admin,
+    label: "Admin",
+    icon: Shield,
+    color: "bg-red-100 text-red-800",
+  },
+  {
+    value: Role.cashier,
+    label: "Cashier",
+    icon: CreditCard,
+    color: "bg-purple-100 text-purple-800",
+  },
+  {
+    value: Role.kitchen,
+    label: "Kitchen",
+    icon: ChefHat,
+    color: "bg-green-100 text-green-800",
+  },
+  {
+    value: Role.customer,
+    label: "Customer",
+    icon: User,
+    color: "bg-gray-100 text-gray-800",
+  },
+];
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "completed":
-        return (
-          <Badge className="bg-green-100 text-green-800">
-            <CheckCircle className="h-3 w-3 mr-1" />
-            Completed
-          </Badge>
-        );
-      case "preparing":
-        return (
-          <Badge className="bg-blue-100 text-blue-800">
-            <Clock className="h-3 w-3 mr-1" />
-            Preparing
-          </Badge>
-        );
-      case "pending":
-        return (
-          <Badge className="bg-yellow-100 text-yellow-800">
-            <AlertCircle className="h-3 w-3 mr-1" />
-            Pending
-          </Badge>
-        );
-      case "ready":
-        return (
-          <Badge className="bg-purple-100 text-purple-800">
-            <CheckCircle className="h-3 w-3 mr-1" />
-            Ready
-          </Badge>
-        );
-      case "cancelled":
-        return (
-          <Badge className="bg-red-100 text-red-800">
-            <XCircle className="h-3 w-3 mr-1" />
-            Cancelled
-          </Badge>
-        );
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
+export default function UserManagement() {
+  const [users, setUsers] = useState<UserInterface[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRole, setSelectedRole] = useState<string>("all");
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0,
+  });
+
+  // Fetch users from API
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: "10",
+        ...(searchTerm && { search: searchTerm }),
+        ...(selectedRole !== "all" && { role: selectedRole }),
+      });
+
+      const response = await fetch(`/api/users?${params}`);
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch users");
+      }
+
+      const data: ApiResponse = await response.json();
+      setUsers(data.users);
+      setPagination(data.pagination);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      toast.error("Failed to fetch users");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getPaymentStatusBadge = (status: string) => {
-    switch (status) {
-      case "paid":
-        return <Badge className="bg-green-100 text-green-800">Paid</Badge>;
-      case "pending":
-        return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>;
-      case "failed":
-        return <Badge className="bg-red-100 text-red-800">Failed</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
+  // Initial fetch and refetch when filters change
+  useEffect(() => {
+    fetchUsers();
+  }, [page, searchTerm, selectedRole]);
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(1); // Reset to first page when searching
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const getUserTypeInfo = (role: Role) => {
+    return userTypes.find((t) => t.value === role) || userTypes[3];
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase();
+  };
+
+  const handleRoleChange = async (userId: number, newRole: Role) => {
+    try {
+      const response = await fetch(`/api/users/${userId}/role`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ role: newRole }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update user role");
+      }
+
+      const updatedUser = await response.json();
+
+      // Update local state
+      setUsers(users.map((user) => (user.id === userId ? updatedUser : user)));
+
+      toast.success("User role updated successfully");
+    } catch (error) {
+      console.error("Error updating user role:", error);
+      toast.error("Failed to update user role");
     }
   };
 
-  const updateOrderStatus = (orderId: number, newStatus: string) => {
-    setOrders(
-      orders.map((order) =>
-        order.id === orderId
-          ? {
-              ...order,
-              order_status: newStatus,
-              completed_time:
-                newStatus === "completed"
-                  ? new Date().toISOString()
-                  : order.completed_time,
-            }
-          : order
-      )
+  const handleSearch = (value: string) => {
+    setSearchTerm(value);
+  };
+
+  const handleRoleFilter = (value: string) => {
+    setSelectedRole(value);
+    setPage(1);
+  };
+
+  if (loading && users.length === 0) {
+    return (
+      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </div>
     );
-  };
-
-  const updatePaymentStatus = (orderId: number, newStatus: string) => {
-    setOrders(
-      orders.map((order) =>
-        order.id === orderId ? { ...order, payment_status: newStatus } : order
-      )
-    );
-  };
-
-  const viewOrderDetails = (order: Order) => {
-    setSelectedOrder(order);
-    setIsDetailDialogOpen(true);
-  };
-
-  const getStatusActions = (order: Order) => {
-    switch (order.order_status) {
-      case "pending":
-        return (
-          <div className="flex space-x-2">
-            <Button
-              size="sm"
-              onClick={() => updateOrderStatus(order.id, "preparing")}
-            >
-              Accept
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => updateOrderStatus(order.id, "cancelled")}
-            >
-              Decline
-            </Button>
-          </div>
-        );
-      case "preparing":
-        return (
-          <Button
-            size="sm"
-            onClick={() => updateOrderStatus(order.id, "ready")}
-          >
-            Mark Ready
-          </Button>
-        );
-      case "ready":
-        return (
-          <Button
-            size="sm"
-            onClick={() => updateOrderStatus(order.id, "completed")}
-          >
-            Mark Served
-          </Button>
-        );
-      default:
-        return null;
-    }
-  };
+  }
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between space-y-2">
         <div className="flex items-center space-x-2">
           <SidebarTrigger />
-          <h2 className="text-3xl font-bold tracking-tight">
-            Order Management
-          </h2>
+          <h2 className="text-3xl font-bold tracking-tight">User Management</h2>
         </div>
-        <div className="flex items-center space-x-2">
-          <Button variant="outline">
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
+        <div>
+          <p className="text-sm text-muted-foreground">
+            Total users: {pagination.total}
+          </p>
         </div>
       </div>
 
       {/* Search and Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Search & Filter Orders</CardTitle>
+          <CardTitle>Search & Filter Users</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by order ID or customer..."
+                placeholder="Search users..."
                 className="pl-8"
+                value={searchTerm}
+                onChange={(e) => handleSearch(e.target.value)}
               />
             </div>
-            <Select>
+            <Select value={selectedRole} onValueChange={handleRoleFilter}>
               <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="All Status" />
+                <SelectValue placeholder="All Roles" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="preparing">Preparing</SelectItem>
-                <SelectItem value="ready">Ready</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="all">All Roles</SelectItem>
+                {userTypes.map((role) => (
+                  <SelectItem key={role.value} value={role.value}>
+                    {role.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            <Select>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Payment Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Payments</SelectItem>
-                <SelectItem value="paid">Paid</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="outline">Today</Button>
+            <Button variant="outline">Active Only</Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Orders List */}
+      {/* Users Grid */}
       <div className="grid gap-4">
-        {orders.map((order) => (
-          <Card key={order.id}>
-            <CardContent className="p-6">
-              <div className="flex flex-col lg:flex-row gap-4">
-                <div className="flex-1 space-y-3">
-                  <div className="flex items-start justify-between">
+        {loading && (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </div>
+        )}
+
+        {users.map((user) => {
+          const typeInfo = getUserTypeInfo(user.role);
+          const TypeIcon = typeInfo.icon;
+
+          return (
+            <Card key={user.id}>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <Avatar className="h-12 w-12">
+                      <AvatarImage
+                        src={`/placeholder.svg?height=48&width=48`}
+                      />
+                      <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+                    </Avatar>
+
                     <div>
-                      <div className="flex items-center space-x-3">
-                        <h3 className="text-lg font-semibold">
-                          #ORD-{order.id.toString().padStart(3, "0")}
-                        </h3>
-                        {getStatusBadge(order.order_status)}
-                        {getPaymentStatusBadge(order.payment_status)}
+                      <div className="flex items-center space-x-2">
+                        <h3 className="text-lg font-semibold">{user.name}</h3>
+                        <Badge className={typeInfo.color}>
+                          <TypeIcon className="h-3 w-3 mr-1" />
+                          {typeInfo.label}
+                        </Badge>
                       </div>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {order.customer_name} • {order.customer_email}
-                      </p>
                       <p className="text-sm text-muted-foreground">
-                        Table {order.table_number} •{" "}
-                        {new Date(order.order_time).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-orange-600">
-                        ${order.total_amount.toFixed(2)}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {order.items.length} items
+                        {user.email}
                       </p>
                     </div>
                   </div>
 
-                  <div>
-                    <p className="text-sm font-medium mb-2">Order Items:</p>
-                    <div className="space-y-1">
-                      {order.items.slice(0, 3).map((item, index) => (
-                        <div
-                          key={index}
-                          className="flex justify-between text-sm"
-                        >
-                          <span>
-                            {item.quantity}x {item.menu_name}
-                            {item.customization && (
-                              <span className="text-muted-foreground">
-                                {" "}
-                                ({item.customization})
-                              </span>
-                            )}
-                          </span>
-                          <span>${item.subtotal.toFixed(2)}</span>
-                        </div>
-                      ))}
-                      {order.items.length > 3 && (
-                        <p className="text-sm text-muted-foreground">
-                          +{order.items.length - 3} more items
-                        </p>
-                      )}
+                  <div className="text-right">
+                    <div className="text-sm text-muted-foreground mb-2">
+                      Created: {new Date(user.created_at).toLocaleDateString()}
                     </div>
-                  </div>
 
-                  <div className="flex items-center justify-between pt-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => viewOrderDetails(order)}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      View Details
-                    </Button>
-                    <div className="flex space-x-2">
-                      {order.payment_status === "pending" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => updatePaymentStatus(order.id, "paid")}
-                        >
-                          <DollarSign className="h-4 w-4 mr-2" />
-                          Mark Paid
-                        </Button>
-                      )}
-                      {getStatusActions(order)}
+                    <div className="flex items-center space-x-2">
+                      <Select
+                        value={user.role}
+                        onValueChange={(value: Role) =>
+                          handleRoleChange(user.id, value)
+                        }
+                      >
+                        <SelectTrigger className="w-[130px]">
+                          <SelectValue placeholder="Change Role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {userTypes.map((role) => (
+                            <SelectItem key={role.value} value={role.value}>
+                              <div className="flex items-center">
+                                <role.icon className="h-4 w-4 mr-2" />
+                                {role.label}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Order Details Dialog */}
-      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>
-              Order Details - #ORD-
-              {selectedOrder?.id.toString().padStart(3, "0")}
-            </DialogTitle>
-            <DialogDescription>
-              Complete order information and items
-            </DialogDescription>
-          </DialogHeader>
-          {selectedOrder && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="font-semibold mb-2">Customer Information</h4>
-                  <p className="text-sm">{selectedOrder.customer_name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedOrder.customer_email}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Table {selectedOrder.table_number}
-                  </p>
-                </div>
-                <div>
-                  <h4 className="font-semibold mb-2">Order Information</h4>
-                  <p className="text-sm">
-                    Order Time:{" "}
-                    {new Date(selectedOrder.order_time).toLocaleString()}
-                  </p>
-                  {selectedOrder.completed_time && (
-                    <p className="text-sm">
-                      Completed:{" "}
-                      {new Date(selectedOrder.completed_time).toLocaleString()}
-                    </p>
-                  )}
-                  <div className="flex space-x-2 mt-2">
-                    {getStatusBadge(selectedOrder.order_status)}
-                    {getPaymentStatusBadge(selectedOrder.payment_status)}
-                  </div>
-                </div>
-              </div>
+      {/* Pagination */}
+      {pagination.totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            Showing {(pagination.page - 1) * pagination.limit + 1} to{" "}
+            {Math.min(pagination.page * pagination.limit, pagination.total)} of{" "}
+            {pagination.total} users
+          </div>
+          <div className="flex space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(page - 1)}
+              disabled={pagination.page <= 1}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(page + 1)}
+              disabled={pagination.page >= pagination.totalPages}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
-              <div>
-                <h4 className="font-semibold mb-2">Order Items</h4>
-                <div className="space-y-2">
-                  {selectedOrder.items.map((item, index) => (
-                    <div
-                      key={index}
-                      className="flex justify-between items-center p-2 border rounded"
-                    >
-                      <div>
-                        <p className="font-medium">{item.menu_name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          ${item.price.toFixed(2)} x {item.quantity}
-                        </p>
-                        {item.customization && (
-                          <p className="text-sm text-blue-600">
-                            Note: {item.customization}
-                          </p>
-                        )}
-                      </div>
-                      <p className="font-semibold">
-                        ${item.subtotal.toFixed(2)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex justify-between items-center pt-4 border-t font-bold text-lg">
-                  <span>Total:</span>
-                  <span className="text-orange-600">
-                    ${selectedOrder.total_amount.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Order Statistics */}
-      <div className="grid gap-4 md:grid-cols-5">
+      {/* User Statistics */}
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{orders.length}</div>
-            <p className="text-xs text-muted-foreground">All time</p>
+            <div className="text-2xl font-bold">{pagination.total}</div>
+            <p className="text-xs text-muted-foreground">Registered users</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">
-              {
-                orders.filter((order) => order.order_status === "pending")
-                  .length
-              }
-            </div>
-            <p className="text-xs text-muted-foreground">Needs attention</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Preparing</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {
-                orders.filter((order) => order.order_status === "preparing")
-                  .length
-              }
-            </div>
-            <p className="text-xs text-muted-foreground">In kitchen</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {
-                orders.filter((order) => order.order_status === "completed")
-                  .length
-              }
-            </div>
-            <p className="text-xs text-muted-foreground">Success rate</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Revenue</CardTitle>
+            <CardTitle className="text-sm font-medium">Customers</CardTitle>
+            <User className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              $
-              {orders
-                .reduce((sum, order) => sum + order.total_amount, 0)
-                .toFixed(2)}
+              {users.filter((user) => user.role === Role.customer).length}
             </div>
-            <p className="text-xs text-muted-foreground">Total revenue</p>
+            <p className="text-xs text-muted-foreground">Customer accounts</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Kitchen Staff</CardTitle>
+            <ChefHat className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {users.filter((user) => user.role === Role.kitchen).length}
+            </div>
+            <p className="text-xs text-muted-foreground">Kitchen accounts</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Cashiers</CardTitle>
+            <CreditCard className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {users.filter((user) => user.role === Role.cashier).length}
+            </div>
+            <p className="text-xs text-muted-foreground">Cashier accounts</p>
           </CardContent>
         </Card>
       </div>

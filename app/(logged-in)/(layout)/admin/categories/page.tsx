@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,117 +16,215 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Plus, Search, Edit, Trash2, FolderOpen } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Plus, Search, Edit, Trash2, FolderOpen, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
+import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { ApiError, Category } from "@/types";
 
-interface Category {
-  id: number;
-  name: string;
-  desc: string | null;
-  menuCount: number;
-  created_at: string;
-  updated_at: string;
-}
+const categoryFormSchema = z.object({
+  name: z
+    .string()
+    .min(1, "Name is required")
+    .max(100, "Name must be less than 100 characters"),
+  desc: z.string().optional(),
+});
+
+type CategoryFormData = z.infer<typeof categoryFormSchema>;
 
 export default function CategoryManagement() {
-  const [categories, setCategories] = useState<Category[]>([
-    {
-      id: 1,
-      name: "Appetizers",
-      desc: "Start your meal with our delicious appetizers",
-      menuCount: 8,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: 2,
-      name: "Main Course",
-      desc: "Our signature main dishes",
-      menuCount: 15,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: 3,
-      name: "Desserts",
-      desc: "Sweet endings to your meal",
-      menuCount: 6,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: 4,
-      name: "Beverages",
-      desc: "Refreshing drinks and cocktails",
-      menuCount: 12,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-  ]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [formLoading, setFormLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(
+    null
+  );
+
+  const form = useForm<CategoryFormData>({
+    resolver: zodResolver(categoryFormSchema),
+    defaultValues: {
+      name: "",
+      desc: "",
+    },
+  });
+
+  // Fetch categories from API
+  const fetchCategories = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/categories");
+
+      if (!response.ok) {
+        const errorData: ApiError = await response.json();
+        throw new Error(errorData.error || "Failed to fetch categories");
+      }
+
+      const data: Category[] = await response.json();
+      setCategories(data);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to fetch categories";
+      console.error("Error fetching categories:", error);
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
 
   const filteredCategories = categories.filter((cat) =>
     cat.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [formData, setFormData] = useState({
-    name: "",
-    desc: "",
-  });
-
   const handleAddCategory = () => {
     setEditingCategory(null);
-    setFormData({ name: "", desc: "" });
+    form.reset({ name: "", desc: "" });
     setIsDialogOpen(true);
   };
 
   const handleEditCategory = (category: Category) => {
     setEditingCategory(category);
-    setFormData({
+    form.reset({
       name: category.name,
       desc: category.desc || "",
     });
     setIsDialogOpen(true);
   };
 
-  const handleSaveCategory = () => {
-    if (editingCategory) {
-      // Update existing category
-      setCategories(
-        categories.map((cat) =>
-          cat.id === editingCategory.id
-            ? {
-                ...cat,
-                name: formData.name,
-                desc: formData.desc,
-                updated_at: new Date().toISOString(),
-              }
-            : cat
-        )
-      );
-    } else {
-      // Add new category
-      const newCategory: Category = {
-        id: Math.max(...categories.map((c) => c.id)) + 1,
-        name: formData.name,
-        desc: formData.desc,
-        menuCount: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      setCategories([...categories, newCategory]);
+  const onSubmit = async (data: CategoryFormData) => {
+    setFormLoading(true);
+
+    try {
+      const url = editingCategory
+        ? `/api/categories/${editingCategory.id}`
+        : "/api/categories";
+
+      const method = editingCategory ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: data.name.trim(),
+          desc: data.desc?.trim() || undefined,
+        }),
+      });
+
+      const responseData: Category | ApiError = await response.json();
+
+      if (!response.ok) {
+        const errorData = responseData as ApiError;
+        throw new Error(errorData.error || "Operation failed");
+      }
+
+      const categoryData = responseData as Category;
+
+      if (editingCategory) {
+        // Update existing category
+        setCategories(
+          categories.map((cat) =>
+            cat.id === editingCategory.id ? categoryData : cat
+          )
+        );
+        toast.success("Category updated successfully");
+      } else {
+        // Add new category
+        setCategories([categoryData, ...categories]);
+        toast.success("Category created successfully");
+      }
+
+      setIsDialogOpen(false);
+      form.reset();
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to save category";
+      console.error("Error saving category:", error);
+      toast.error(errorMessage);
+    } finally {
+      setFormLoading(false);
     }
-    setIsDialogOpen(false);
-    setFormData({ name: "", desc: "" });
   };
 
-  const handleDeleteCategory = (id: number) => {
-    setCategories(categories.filter((cat) => cat.id !== id));
+  const handleDeleteClick = (category: Category) => {
+    setCategoryToDelete(category);
+    setDeleteDialogOpen(true);
   };
+
+  const handleDeleteConfirm = async () => {
+    if (!categoryToDelete) return;
+
+    try {
+      const response = await fetch(`/api/categories/${categoryToDelete.id}`, {
+        method: "DELETE",
+      });
+
+      const data: { message: string } | ApiError = await response.json();
+
+      if (!response.ok) {
+        const errorData = data as ApiError;
+        throw new Error(errorData.error || "Failed to delete category");
+      }
+
+      setCategories(categories.filter((cat) => cat.id !== categoryToDelete.id));
+      toast.success("Category deleted successfully");
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to delete category";
+      console.error("Error deleting category:", error);
+      toast.error(errorMessage);
+    } finally {
+      setDeleteDialogOpen(false);
+      setCategoryToDelete(null);
+    }
+  };
+
+  const handleDialogClose = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) {
+      form.reset();
+      setEditingCategory(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -137,7 +235,7 @@ export default function CategoryManagement() {
             Category Management
           </h2>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
           <DialogTrigger asChild>
             <Button onClick={handleAddCategory}>
               <Plus className="mr-2 h-4 w-4" />
@@ -155,37 +253,50 @@ export default function CategoryManagement() {
                   : "Create a new category for your menu items."}
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right">
-                  Name
-                </Label>
-                <Input
-                  placeholder="Search categories..."
-                  className="pl-8"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+            <Form {...form}>
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="space-y-4"
+              >
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter category name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="desc" className="text-right">
-                  Description
-                </Label>
-                <Textarea
-                  id="desc"
-                  value={formData.desc}
-                  onChange={(e) =>
-                    setFormData({ ...formData, desc: e.target.value })
-                  }
-                  className="col-span-3"
+                <FormField
+                  control={form.control}
+                  name="desc"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Enter category description (optional)"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="submit" onClick={handleSaveCategory}>
-                {editingCategory ? "Update" : "Create"}
-              </Button>
-            </DialogFooter>
+                <DialogFooter>
+                  <Button type="submit" disabled={formLoading}>
+                    {formLoading && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    {editingCategory ? "Update" : "Create"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
           </DialogContent>
         </Dialog>
       </div>
@@ -198,7 +309,12 @@ export default function CategoryManagement() {
         <CardContent>
           <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search categories..." className="pl-8" />
+            <Input
+              placeholder="Search categories..."
+              className="pl-8"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
         </CardContent>
       </Card>
@@ -237,7 +353,7 @@ export default function CategoryManagement() {
                     size="sm"
                     variant="outline"
                     className="text-red-600 hover:text-red-700"
-                    onClick={() => handleDeleteCategory(category.id)}
+                    onClick={() => handleDeleteClick(category)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -247,6 +363,18 @@ export default function CategoryManagement() {
           </Card>
         ))}
       </div>
+
+      {filteredCategories.length === 0 && !loading && (
+        <Card>
+          <CardContent className="flex items-center justify-center h-32">
+            <p className="text-muted-foreground">
+              {searchQuery
+                ? "No categories found matching your search."
+                : "No categories found. Create your first category!"}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Statistics */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -286,7 +414,9 @@ export default function CategoryManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {Math.max(...categories.map((cat) => cat.menuCount))}
+              {categories.length > 0
+                ? Math.max(...categories.map((cat) => cat.menuCount))
+                : 0}
             </div>
             <p className="text-xs text-muted-foreground">
               Items in largest category
@@ -300,15 +430,55 @@ export default function CategoryManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {Math.round(
-                categories.reduce((sum, cat) => sum + cat.menuCount, 0) /
-                  categories.length
-              )}
+              {categories.length > 0
+                ? Math.round(
+                    categories.reduce((sum, cat) => sum + cat.menuCount, 0) /
+                      categories.length
+                  )
+                : 0}
             </div>
             <p className="text-xs text-muted-foreground">Per category</p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the category &ldquo;
+              {categoryToDelete?.name}&rdquo;.
+              {categoryToDelete && categoryToDelete.menuCount > 0 && (
+                <span className="text-red-600 block mt-2 font-medium">
+                  ⚠️ This category has {categoryToDelete.menuCount} menu items.
+                  Please remove them first before deleting the category.
+                </span>
+              )}
+              {categoryToDelete && categoryToDelete.menuCount === 0 && (
+                <span className="block mt-2">
+                  This action cannot be undone.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={
+                categoryToDelete ? categoryToDelete.menuCount > 0 : false
+              }
+            >
+              {categoryToDelete && categoryToDelete.menuCount > 0
+                ? "Cannot Delete"
+                : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

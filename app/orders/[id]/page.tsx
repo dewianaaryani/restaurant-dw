@@ -121,8 +121,10 @@ export default function OrderDetailPage({
 }) {
   const router = useRouter();
   const { user, isLoading } = useAuth();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  S;
 
   // Fetch order data
   useEffect(() => {

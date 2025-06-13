@@ -1,11 +1,8 @@
-// middleware.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  // Get the token using getToken instead of auth()
   const token = await getToken({
     req: request,
     secret: process.env.NEXTAUTH_SECRET,
@@ -13,60 +10,66 @@ export async function middleware(request: NextRequest) {
 
   console.log(`User ${token?.email || "anonymous"} accessing ${pathname}`);
 
-  // Define route categories
-  const publicRoutes = ["/", "/about", "/contact"];
-  const authRoutes = ["/login", "/register"];
-  const protectedRoutes = ["/dashboard", "/profile"];
-  const adminRoutes = ["/admin"];
-  const customerRoutes = ["/orders", "/menu"];
+  // Route configurations
+  const routes = {
+    public: ["/"],
+    auth: ["/login", "/register"],
+    protected: ["/dashboard", "/profile"],
+    admin: ["/admin"],
+    customer: ["/orders", "/menu"],
+  };
 
-  // Helper functions
+  // Check route types
   const isPublicRoute =
-    publicRoutes.includes(pathname) || pathname.startsWith("/api/auth");
-  const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
-  const isProtectedRoute = protectedRoutes.some((route) =>
+    routes.public.includes(pathname) || pathname.startsWith("/api/auth");
+  const isAuthRoute = routes.auth.some((route) => pathname.startsWith(route));
+  const isProtectedRoute = routes.protected.some((route) =>
     pathname.startsWith(route)
   );
-  const isAdminRoute = adminRoutes.some((route) => pathname.startsWith(route));
-  const isCustomerRoute = customerRoutes.some((route) =>
+  const isAdminRoute = routes.admin.some((route) => pathname.startsWith(route));
+  const isCustomerRoute = routes.customer.some((route) =>
     pathname.startsWith(route)
   );
-  // Allow public routes and API auth routes
+
+  // Allow public routes
   if (isPublicRoute) {
     return NextResponse.next();
   }
-
+  function getRoleBasedRedirect(role: string | undefined): string {
+    switch (role) {
+      case "admin":
+        return "/admin";
+      case "customer":
+        return "/menu";
+      default:
+        return "/dashboard";
+    }
+  }
   // Redirect authenticated users away from auth pages
   if (isAuthRoute && token) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    const roleBasedRedirect = getRoleBasedRedirect(token.role);
+    return NextResponse.redirect(new URL(roleBasedRedirect, request.url));
   }
 
-  // Redirect unauthenticated users to login
-  if (!token && (isProtectedRoute || isAdminRoute)) {
+  // All protected routes require authentication
+  const requiresAuth = isProtectedRoute || isAdminRoute || isCustomerRoute;
+
+  if (!token && requiresAuth) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Admin route protection
-  if (isAdminRoute && token) {
-    if (token.role !== "admin") {
+  // Role-based access control for authenticated users
+  if (token && requiresAuth) {
+    if (isAdminRoute && token.role !== "admin") {
       return NextResponse.redirect(new URL("/unauthorized", request.url));
     }
-  }
-  if (isCustomerRoute && token) {
-    if (token.role !== "customer") {
+
+    if (isCustomerRoute && token.role !== "customer") {
       return NextResponse.redirect(new URL("/unauthorized", request.url));
     }
   }
 
   return NextResponse.next();
 }
-
-// Configure which routes to run middleware on
-export const config = {
-  matcher: [
-    // Match all routes except static files and API routes
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.jpg$|.*\\.jpeg$|.*\\.gif$|.*\\.svg$).*)",
-  ],
-};

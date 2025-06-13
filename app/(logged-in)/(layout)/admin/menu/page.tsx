@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,174 +18,394 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Plus, Search, Edit, Trash2, Eye, Star, Upload } from "lucide-react";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Plus, Search, Edit, Trash2, Star, Loader2 } from "lucide-react";
 import Image from "next/image";
+import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 
+// Types
 interface MenuItem {
-  id: number;
+  id: string;
   category_id: string;
+  categoryName: string;
   name: string;
-  desc: string;
-  image: string;
+  desc: string | null;
+  image: string | null;
   is_available: boolean;
   price: number;
   rating: number;
-  orders: number;
   created_at: string;
   updated_at: string;
 }
 
+interface Category {
+  id: string;
+  name: string;
+  desc: string | null;
+  menuCount: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ApiError {
+  error: string;
+  details?: unknown;
+}
+
+// Form validation schema - Clean approach without type conflicts
+const menuFormSchema = z.object({
+  category_id: z.string().min(1, "Category is required"),
+  name: z
+    .string()
+    .min(1, "Name is required")
+    .max(255, "Name must be less than 255 characters"),
+  desc: z.string().optional(),
+  price: z.coerce
+    .number()
+    .int()
+    .positive("Price must be a positive number in IDR"),
+  image: z
+    .string()
+    .optional()
+    .refine((val) => {
+      if (!val || val === "") return true; // Allow empty
+      try {
+        new URL(val.startsWith("http") ? val : `https://${val}`);
+        return true;
+      } catch {
+        return false;
+      }
+    }, "Please enter a valid image URL")
+    .or(z.literal("")),
+  is_available: z.boolean(),
+});
+
+type MenuFormData = z.infer<typeof menuFormSchema>;
+
+// Currency formatting utility
+const formatIDR = (amount: number): string => {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
+
 export default function MenuManagement() {
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([
-    {
-      id: 1,
-      category_id: "1",
-      name: "Grilled Salmon",
-      desc: "Fresh Atlantic salmon with herbs and lemon",
-      image: "/placeholder.svg?height=100&width=150",
-      is_available: true,
-      price: 28.0,
-      rating: 4.8,
-      orders: 45,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: 2,
-      category_id: "2",
-      name: "Beef Wellington",
-      desc: "Classic beef wellington with mushroom duxelles",
-      image: "/placeholder.svg?height=100&width=150",
-      is_available: true,
-      price: 45.0,
-      rating: 4.9,
-      orders: 32,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: 3,
-      category_id: "2",
-      name: "Truffle Risotto",
-      desc: "Creamy arborio rice with black truffle",
-      image: "/placeholder.svg?height=100&width=150",
-      is_available: true,
-      price: 32.0,
-      rating: 4.7,
-      orders: 28,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-    {
-      id: 4,
-      category_id: "1",
-      name: "Caesar Salad",
-      desc: "Classic caesar salad with parmesan and croutons",
-      image: "/placeholder.svg?height=100&width=150",
-      is_available: false,
-      price: 16.0,
-      rating: 4.5,
-      orders: 15,
-      created_at: "2024-01-01T10:00:00Z",
-      updated_at: "2024-01-01T10:00:00Z",
-    },
-  ]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [availableOnly, setAvailableOnly] = useState(false);
 
-  const categories = [
-    { id: "1", name: "Appetizers" },
-    { id: "2", name: "Main Course" },
-    { id: "3", name: "Desserts" },
-    { id: "4", name: "Beverages" },
-  ];
-
+  // Dialog states
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
-  const [formData, setFormData] = useState({
-    category_id: "",
-    name: "",
-    desc: "",
-    image: "",
-    is_available: true,
-    price: 0,
-  });
+  const [formLoading, setFormLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<MenuItem | null>(null);
 
-  const handleAddItem = () => {
-    setEditingItem(null);
-    setFormData({
+  const form = useForm<MenuFormData>({
+    resolver: zodResolver(menuFormSchema),
+    defaultValues: {
       category_id: "",
       name: "",
       desc: "",
+      price: 0,
       image: "",
       is_available: true,
+    },
+  });
+
+  // Fetch categories
+  const fetchCategories = useCallback(async () => {
+    try {
+      const response = await fetch("/api/categories");
+      if (!response.ok) {
+        const errorData: ApiError = await response.json();
+        throw new Error(errorData.error || "Failed to fetch categories");
+      }
+      const data: Category[] = await response.json();
+      setCategories(data);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to fetch categories";
+      console.error("Error fetching categories:", error);
+      toast.error(errorMessage);
+    }
+  }, []);
+
+  // Fetch menu items - Fixed: Added useCallback to resolve dependency warning
+  const fetchMenuItems = useCallback(async () => {
+    try {
+      setLoading(true);
+      let url = "/api/menu";
+      const params = new URLSearchParams();
+
+      if (selectedCategory !== "all") {
+        params.append("category_id", selectedCategory);
+      }
+      if (searchQuery) {
+        params.append("search", searchQuery);
+      }
+      if (availableOnly) {
+        params.append("available", "true");
+      }
+
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        const errorData: ApiError = await response.json();
+        throw new Error(errorData.error || "Failed to fetch menu items");
+      }
+      const data: MenuItem[] = await response.json();
+      setMenuItems(data);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to fetch menu items";
+      console.error("Error fetching menu items:", error);
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedCategory, searchQuery, availableOnly]);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
+  useEffect(() => {
+    fetchMenuItems();
+  }, [fetchMenuItems]);
+
+  // Dialog handlers
+  const handleAddItem = () => {
+    setEditingItem(null);
+    form.reset({
+      category_id: "",
+      name: "",
+      desc: "",
       price: 0,
+      image: "",
+      is_available: true,
     });
     setIsDialogOpen(true);
   };
 
   const handleEditItem = (item: MenuItem) => {
     setEditingItem(item);
-    setFormData({
+    form.reset({
       category_id: item.category_id,
       name: item.name,
-      desc: item.desc,
-      image: item.image,
-      is_available: item.is_available,
+      desc: item.desc || "",
       price: item.price,
+      image: item.image || "",
+      is_available: item.is_available,
     });
     setIsDialogOpen(true);
   };
 
-  const handleSaveItem = () => {
-    if (editingItem) {
+  const onSubmit = async (data: MenuFormData) => {
+    setFormLoading(true);
+
+    try {
+      const url = editingItem ? `/api/menu/${editingItem.id}` : "/api/menu";
+      const method = editingItem ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...data,
+          image: data.image || undefined,
+          desc: data.desc || undefined,
+        }),
+      });
+
+      const responseData: MenuItem | ApiError = await response.json();
+
+      if (!response.ok) {
+        const errorData = responseData as ApiError;
+        throw new Error(errorData.error || "Operation failed");
+      }
+
+      const menuData = responseData as MenuItem;
+
+      if (editingItem) {
+        setMenuItems(
+          menuItems.map((item) =>
+            item.id === editingItem.id ? menuData : item
+          )
+        );
+        toast.success("Menu item updated successfully");
+      } else {
+        setMenuItems([menuData, ...menuItems]);
+        toast.success("Menu item created successfully");
+      }
+
+      setIsDialogOpen(false);
+      form.reset();
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to save menu item";
+      console.error("Error saving menu item:", error);
+      toast.error(errorMessage);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleDeleteClick = (item: MenuItem) => {
+    setItemToDelete(item);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!itemToDelete) return;
+
+    try {
+      const response = await fetch(`/api/menu/${itemToDelete.id}`, {
+        method: "DELETE",
+      });
+
+      const data: { message: string } | ApiError = await response.json();
+
+      if (!response.ok) {
+        const errorData = data as ApiError;
+        throw new Error(errorData.error || "Failed to delete menu item");
+      }
+
+      setMenuItems(menuItems.filter((item) => item.id !== itemToDelete.id));
+      toast.success("Menu item deleted successfully");
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to delete menu item";
+      console.error("Error deleting menu item:", error);
+      toast.error(errorMessage);
+    } finally {
+      setDeleteDialogOpen(false);
+      setItemToDelete(null);
+    }
+  };
+
+  const toggleAvailability = async (item: MenuItem) => {
+    try {
+      const response = await fetch(`/api/menu/${item.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          category_id: item.category_id,
+          name: item.name,
+          desc: item.desc,
+          price: item.price,
+          image: item.image,
+          is_available: !item.is_available,
+        }),
+      });
+
+      const responseData: MenuItem | ApiError = await response.json();
+
+      if (!response.ok) {
+        const errorData = responseData as ApiError;
+        throw new Error(errorData.error || "Failed to update availability");
+      }
+
+      const updatedItem = responseData as MenuItem;
       setMenuItems(
-        menuItems.map((item) =>
-          item.id === editingItem.id
-            ? { ...item, ...formData, updated_at: new Date().toISOString() }
-            : item
+        menuItems.map((menuItem) =>
+          menuItem.id === item.id ? updatedItem : menuItem
         )
       );
-    } else {
-      const newItem: MenuItem = {
-        id: Math.max(...menuItems.map((i) => i.id)) + 1,
-        ...formData,
-        rating: 0,
-        orders: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      setMenuItems([...menuItems, newItem]);
+
+      toast.success(
+        `Menu item ${updatedItem.is_available ? "enabled" : "disabled"}`
+      );
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to update availability";
+      console.error("Error updating availability:", error);
+      toast.error(errorMessage);
     }
-    setIsDialogOpen(false);
   };
 
-  const handleDeleteItem = (id: number) => {
-    setMenuItems(menuItems.filter((item) => item.id !== id));
+  const handleDialogClose = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) {
+      form.reset();
+      setEditingItem(null);
+    }
   };
 
-  const toggleAvailability = (id: number) => {
-    setMenuItems(
-      menuItems.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              is_available: !item.is_available,
-              updated_at: new Date().toISOString(),
-            }
-          : item
-      )
+  // Filter items for display
+  const filteredItems = menuItems.filter((item) => {
+    if (availableOnly && !item.is_available) return false;
+    if (selectedCategory !== "all" && item.category_id !== selectedCategory)
+      return false;
+    if (
+      searchQuery &&
+      !item.name.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+      return false;
+    return true;
+  });
+
+  // Statistics
+  const availableItems = menuItems.filter((item) => item.is_available).length;
+  const avgRating =
+    menuItems.length > 0
+      ? menuItems.reduce((sum, item) => sum + item.rating, 0) / menuItems.length
+      : 0;
+  const avgPrice =
+    menuItems.length > 0
+      ? menuItems.reduce((sum, item) => sum + item.price, 0) / menuItems.length
+      : 0;
+
+  if (loading) {
+    return (
+      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </div>
     );
-  };
-
-  const getCategoryName = (categoryId: string) => {
-    return categories.find((cat) => cat.id === categoryId)?.name || "Unknown";
-  };
+  }
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -194,7 +414,7 @@ export default function MenuManagement() {
           <SidebarTrigger />
           <h2 className="text-3xl font-bold tracking-tight">Menu Management</h2>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
           <DialogTrigger asChild>
             <Button onClick={handleAddItem}>
               <Plus className="mr-2 h-4 w-4" />
@@ -212,109 +432,138 @@ export default function MenuManagement() {
                   : "Create a new menu item for your restaurant."}
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="category" className="text-right">
-                  Category
-                </Label>
-                <Select
-                  value={formData.category_id}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, category_id: value })
-                  }
-                >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right">
-                  Name
-                </Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  className="col-span-3"
+            <Form {...form}>
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="space-y-4"
+              >
+                <FormField
+                  control={form.control}
+                  name="category_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {categories.map((category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="desc" className="text-right">
-                  Description
-                </Label>
-                <Textarea
-                  id="desc"
-                  value={formData.desc}
-                  onChange={(e) =>
-                    setFormData({ ...formData, desc: e.target.value })
-                  }
-                  className="col-span-3"
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter menu item name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="price" className="text-right">
-                  Price ($)
-                </Label>
-                <Input
-                  id="price"
-                  type="number"
-                  step="0.01"
-                  value={formData.price}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      price: Number.parseFloat(e.target.value),
-                    })
-                  }
-                  className="col-span-3"
+                <FormField
+                  control={form.control}
+                  name="desc"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Enter description (optional)"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="image" className="text-right">
-                  Image URL
-                </Label>
-                <div className="col-span-3 flex space-x-2">
-                  <Input
-                    id="image"
-                    value={formData.image}
-                    onChange={(e) =>
-                      setFormData({ ...formData, image: e.target.value })
-                    }
-                    placeholder="Enter image URL"
-                  />
-                  <Button variant="outline" size="sm">
-                    <Upload className="h-4 w-4" />
+                <FormField
+                  control={form.control}
+                  name="price"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Price (IDR)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder="Enter price in IDR (e.g., 25000)"
+                          {...field}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            field.onChange(
+                              value === "" ? 0 : parseInt(value) || 0
+                            );
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="image"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Image URL</FormLabel>
+                      <FormControl>
+                        <div className="flex space-x-2">
+                          <Input
+                            placeholder="https://example.com/image.jpg"
+                            {...field}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="is_available"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">Available</FormLabel>
+                        <div className="text-sm text-muted-foreground">
+                          Make this item available for ordering
+                        </div>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <DialogFooter>
+                  <Button type="submit" disabled={formLoading}>
+                    {formLoading && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    {editingItem ? "Update" : "Create"}
                   </Button>
-                </div>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="available" className="text-right">
-                  Available
-                </Label>
-                <Switch
-                  id="available"
-                  checked={formData.is_available}
-                  onCheckedChange={(checked) =>
-                    setFormData({ ...formData, is_available: checked })
-                  }
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="submit" onClick={handleSaveItem}>
-                {editingItem ? "Update" : "Create"}
-              </Button>
-            </DialogFooter>
+                </DialogFooter>
+              </form>
+            </Form>
           </DialogContent>
         </Dialog>
       </div>
@@ -328,9 +577,17 @@ export default function MenuManagement() {
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search menu items..." className="pl-8" />
+              <Input
+                placeholder="Search menu items..."
+                className="pl-8"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
-            <Select>
+            <Select
+              value={selectedCategory}
+              onValueChange={setSelectedCategory}
+            >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
@@ -343,14 +600,19 @@ export default function MenuManagement() {
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline">Available Only</Button>
+            <Button
+              variant={availableOnly ? "default" : "outline"}
+              onClick={() => setAvailableOnly(!availableOnly)}
+            >
+              Available Only
+            </Button>
           </div>
         </CardContent>
       </Card>
 
       {/* Menu Items Grid */}
       <div className="grid gap-4">
-        {menuItems.map((item) => (
+        {filteredItems.map((item) => (
           <Card key={item.id}>
             <CardContent className="p-6">
               <div className="flex flex-col md:flex-row gap-4">
@@ -368,12 +630,10 @@ export default function MenuManagement() {
                     <div>
                       <h3 className="text-lg font-semibold">{item.name}</h3>
                       <p className="text-sm text-muted-foreground">
-                        {item.desc}
+                        {item.desc || "No description available"}
                       </p>
                       <div className="flex items-center space-x-2 mt-2">
-                        <Badge variant="secondary">
-                          {getCategoryName(item.category_id)}
-                        </Badge>
+                        <Badge variant="secondary">{item.categoryName}</Badge>
                         <Badge
                           className={
                             item.is_available
@@ -387,7 +647,7 @@ export default function MenuManagement() {
                     </div>
                     <div className="text-right">
                       <p className="text-2xl font-bold text-orange-600">
-                        ${item.price.toFixed(2)}
+                        {formatIDR(item.price)}
                       </p>
                     </div>
                   </div>
@@ -396,19 +656,15 @@ export default function MenuManagement() {
                     <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                       <div className="flex items-center">
                         <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 mr-1" />
-                        {item.rating}
+                        {item.rating.toFixed(1)}
                       </div>
-                      <span>{item.orders} orders this month</span>
                     </div>
 
                     <div className="flex items-center space-x-2">
                       <Switch
                         checked={item.is_available}
-                        onCheckedChange={() => toggleAvailability(item.id)}
+                        onCheckedChange={() => toggleAvailability(item)}
                       />
-                      <Button size="sm" variant="outline">
-                        <Eye className="h-4 w-4" />
-                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
@@ -420,7 +676,7 @@ export default function MenuManagement() {
                         size="sm"
                         variant="outline"
                         className="text-red-600 hover:text-red-700"
-                        onClick={() => handleDeleteItem(item.id)}
+                        onClick={() => handleDeleteClick(item)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -432,6 +688,18 @@ export default function MenuManagement() {
           </Card>
         ))}
       </div>
+
+      {filteredItems.length === 0 && !loading && (
+        <Card>
+          <CardContent className="flex items-center justify-center h-32">
+            <p className="text-muted-foreground">
+              {searchQuery || selectedCategory !== "all" || availableOnly
+                ? "No menu items found matching your filters."
+                : "No menu items found. Create your first menu item!"}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary Stats */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -452,15 +720,11 @@ export default function MenuManagement() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {menuItems.filter((item) => item.is_available).length}
-            </div>
+            <div className="text-2xl font-bold">{availableItems}</div>
             <p className="text-xs text-muted-foreground">
-              {Math.round(
-                (menuItems.filter((item) => item.is_available).length /
-                  menuItems.length) *
-                  100
-              )}
+              {menuItems.length > 0
+                ? Math.round((availableItems / menuItems.length) * 100)
+                : 0}
               % of total
             </p>
           </CardContent>
@@ -471,12 +735,7 @@ export default function MenuManagement() {
             <CardTitle className="text-sm font-medium">Avg. Rating</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {(
-                menuItems.reduce((sum, item) => sum + item.rating, 0) /
-                menuItems.length
-              ).toFixed(1)}
-            </div>
+            <div className="text-2xl font-bold">{avgRating.toFixed(1)}</div>
             <p className="text-xs text-muted-foreground">Overall rating</p>
           </CardContent>
         </Card>
@@ -486,17 +745,33 @@ export default function MenuManagement() {
             <CardTitle className="text-sm font-medium">Avg. Price</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              $
-              {(
-                menuItems.reduce((sum, item) => sum + item.price, 0) /
-                menuItems.length
-              ).toFixed(2)}
-            </div>
+            <div className="text-2xl font-bold">{formatIDR(avgPrice)}</div>
             <p className="text-xs text-muted-foreground">Average price</p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete &ldquo;{itemToDelete?.name}&rdquo;.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

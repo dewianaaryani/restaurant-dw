@@ -82,7 +82,7 @@ export default function LoginPage() {
       <div className="container max-w-md mx-auto flex-1 flex flex-col items-center justify-center px-4 py-12">
         <div className="flex items-center mb-8">
           <ChefHat className="h-10 w-10 text-orange-600 mr-2" />
-          <h1 className="text-2xl font-bold">Bella Vista</h1>
+          <h1 className="text-2xl font-bold">Dw</h1>
         </div>
 
         <Card className="w-full">

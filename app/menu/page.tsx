@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardDescription,
@@ -21,140 +21,97 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Star, Search } from "lucide-react";
+import { Star, Search, Loader2 } from "lucide-react";
 import Image from "next/image";
 import { MainNav } from "../components/main-nav";
 import { useCart } from "@/context/cart-context";
-
-// Sample data for categories and menu items
-const categories = [
-  {
-    id: "1",
-    name: "Appetizers",
-    desc: "Start your meal with our delicious appetizers",
-  },
-  { id: "2", name: "Main Course", desc: "Our signature main dishes" },
-  { id: "3", name: "Desserts", desc: "Sweet endings to your meal" },
-  { id: "4", name: "Beverages", desc: "Refreshing drinks and cocktails" },
-];
-
-const menuItems = [
-  {
-    id: 1,
-    category_id: "1",
-    name: "Bruschetta",
-    desc: "Toasted bread topped with tomatoes, garlic, and fresh basil",
-    image: "/placeholder.svg?height=200&width=300",
-    is_available: true,
-    price: 12.0,
-    rating: 4.6,
-  },
-  {
-    id: 2,
-    category_id: "1",
-    name: "Calamari",
-    desc: "Crispy fried squid served with marinara sauce",
-    image: "/placeholder.svg?height=200&width=300",
-    is_available: true,
-    price: 14.0,
-    rating: 4.5,
-  },
-  {
-    id: 3,
-    category_id: "2",
-    name: "Grilled Salmon",
-    desc: "Fresh Atlantic salmon with herbs and lemon",
-    image: "/placeholder.svg?height=200&width=300",
-    is_available: true,
-    price: 28.0,
-    rating: 4.8,
-  },
-  {
-    id: 4,
-    category_id: "2",
-    name: "Beef Wellington",
-    desc: "Classic beef wellington with mushroom duxelles",
-    image: "/placeholder.svg?height=200&width=300",
-    is_available: true,
-    price: 45.0,
-    rating: 4.9,
-  },
-  {
-    id: 5,
-    category_id: "2",
-    name: "Truffle Risotto",
-    desc: "Creamy arborio rice with black truffle",
-    image: "/placeholder.svg?height=200&width=300",
-    is_available: true,
-    price: 32.0,
-    rating: 4.7,
-  },
-  {
-    id: 6,
-    category_id: "3",
-    name: "Tiramisu",
-    desc: "Classic Italian dessert with coffee-soaked ladyfingers",
-    image: "/placeholder.svg?height=200&width=300",
-    is_available: true,
-    price: 9.0,
-    rating: 4.8,
-  },
-  {
-    id: 7,
-    category_id: "3",
-    name: "Chocolate Lava Cake",
-    desc: "Warm chocolate cake with a molten center",
-    image: "/placeholder.svg?height=200&width=300",
-    is_available: true,
-    price: 11.0,
-    rating: 4.9,
-  },
-  {
-    id: 8,
-    category_id: "4",
-    name: "Signature Cocktail",
-    desc: "Our house special with premium spirits",
-    image: "/placeholder.svg?height=200&width=300",
-    is_available: true,
-    price: 14.0,
-    rating: 4.7,
-  },
-  {
-    id: 9,
-    category_id: "4",
-    name: "Italian Wine",
-    desc: "Premium selection from Italian vineyards",
-    image: "/placeholder.svg?height=200&width=300",
-    is_available: true,
-    price: 18.0,
-    rating: 4.8,
-  },
-];
+import { toast } from "sonner";
 
 interface MenuItem {
-  id: number;
+  id: string;
   category_id: string;
+  categoryName: string;
   name: string;
-  desc: string;
-  image: string;
-  is_available: boolean;
+  desc: string | null;
   price: number;
+  image: string | null;
+  is_available: boolean;
   rating: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface MenuCategory {
+  id: string;
+  name: string;
+  desc: string | null;
+  menuCount: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export default function MenuPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [categories, setCategories] = useState<MenuCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch categories and menu items
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+
+        // Fetch categories
+        const categoriesResponse = await fetch("/api/categories");
+        if (!categoriesResponse.ok) {
+          throw new Error("Failed to fetch categories");
+        }
+        const categoriesData = await categoriesResponse.json();
+        setCategories(categoriesData);
+
+        // Fetch menu items
+        const menuResponse = await fetch("/api/menu?available=true");
+        if (!menuResponse.ok) {
+          throw new Error("Failed to fetch menu items");
+        }
+        const menuData = await menuResponse.json();
+        setMenuItems(menuData);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        toast.error("Failed to load menu data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   // Filter menu items based on search query and selected category
   const filteredItems = menuItems.filter((item) => {
     const matchesSearch =
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.desc.toLowerCase().includes(searchQuery.toLowerCase());
+      (item.desc &&
+        item.desc.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory =
       selectedCategory === "all" || item.category_id === selectedCategory;
     return matchesSearch && matchesCategory && item.is_available;
   });
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <MainNav />
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -197,7 +154,7 @@ export default function MenuPage() {
             <TabsTrigger value="all">All Items</TabsTrigger>
             {categories.map((category) => (
               <TabsTrigger key={category.id} value={category.id}>
-                {category.name}
+                {category.name} ({category.menuCount})
               </TabsTrigger>
             ))}
           </TabsList>
@@ -222,6 +179,17 @@ export default function MenuPage() {
             </TabsContent>
           ))}
         </Tabs>
+
+        {/* No results message */}
+        {filteredItems.length === 0 && !loading && (
+          <div className="text-center py-12">
+            <p className="text-gray-500 text-lg">
+              {searchQuery
+                ? `No menu items found matching "${searchQuery}"`
+                : "No menu items available in this category"}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -234,20 +202,18 @@ function MenuItemCard({ item }: { item: MenuItem }) {
   const [customization, setCustomization] = useState("");
 
   const handleAddToCart = () => {
-    const categoryName =
-      categories.find((cat) => cat.id === item.category_id)?.name || "Unknown";
-
     addItem({
-      id: item.id,
+      id: parseInt(item.id), // Convert string ID to number for cart
       name: item.name,
       price: item.price,
       quantity: quantity,
-      image: item.image,
+      image: item.image || "/placeholder.svg",
       customization: customization,
       categoryId: item.category_id,
-      categoryName: categoryName,
+      categoryName: item.categoryName,
     });
 
+    toast.success(`${item.name} added to cart!`);
     setIsDialogOpen(false);
     setQuantity(1);
     setCustomization("");
@@ -264,8 +230,15 @@ function MenuItemCard({ item }: { item: MenuItem }) {
         />
         <Badge className="absolute top-4 right-4 bg-white text-gray-900">
           <Star className="h-3 w-3 mr-1 fill-yellow-400 text-yellow-400" />
-          {item.rating}
+          {item.rating.toFixed(1)}
         </Badge>
+        {!item.is_available && (
+          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+            <Badge variant="destructive" className="text-white">
+              Currently Unavailable
+            </Badge>
+          </div>
+        )}
       </div>
       <CardHeader>
         <div className="flex justify-between items-start">
@@ -274,13 +247,18 @@ function MenuItemCard({ item }: { item: MenuItem }) {
             ${item.price.toFixed(2)}
           </span>
         </div>
-        <CardDescription>{item.desc}</CardDescription>
+        <CardDescription>
+          {item.desc || "Delicious dish prepared with care"}
+        </CardDescription>
       </CardHeader>
       <CardFooter>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="w-full bg-orange-600 hover:bg-orange-700">
-              Order Now
+            <Button
+              className="w-full bg-orange-600 hover:bg-orange-700"
+              disabled={!item.is_available}
+            >
+              {item.is_available ? "Order Now" : "Unavailable"}
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
@@ -296,7 +274,9 @@ function MenuItemCard({ item }: { item: MenuItem }) {
                   className="object-cover rounded-md"
                 />
               </div>
-              <p className="text-sm text-muted-foreground">{item.desc}</p>
+              <p className="text-sm text-muted-foreground">
+                {item.desc || "Delicious dish prepared with care"}
+              </p>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="quantity" className="text-right">
                   Quantity

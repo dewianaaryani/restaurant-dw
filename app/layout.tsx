@@ -9,7 +9,7 @@ import { Providers } from "./components/providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Bella Vista Restaurant",
+  title: "Dw Restaurant",
   description: "Exceptional dining experience with carefully crafted dishes",
 };
 

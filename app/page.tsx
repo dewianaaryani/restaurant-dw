@@ -1,13 +1,5 @@
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
   Clock,
   MapPin,
   Phone,
@@ -15,36 +7,15 @@ import {
   ChefHat,
   Users,
   Award,
+  UtensilsCrossed,
+  ChevronDown,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { MainNav } from "./components/main-nav";
+import { Badge } from "@/components/ui/badge";
 
 export default function HomePage() {
-  const featuredDishes = [
-    {
-      name: "Grilled Salmon",
-      description: "Fresh Atlantic salmon with herbs and lemon",
-      price: "$28",
-      image: "/placeholder.svg?height=200&width=300",
-      rating: 4.8,
-    },
-    {
-      name: "Beef Wellington",
-      description: "Classic beef wellington with mushroom duxelles",
-      price: "$45",
-      image: "/placeholder.svg?height=200&width=300",
-      rating: 4.9,
-    },
-    {
-      name: "Truffle Risotto",
-      description: "Creamy arborio rice with black truffle",
-      price: "$32",
-      image: "/placeholder.svg?height=200&width=300",
-      rating: 4.7,
-    },
-  ];
-
   const stats = [
     { icon: ChefHat, label: "Expert Chefs", value: "15+" },
     { icon: Users, label: "Happy Customers", value: "10K+" },
@@ -56,28 +27,72 @@ export default function HomePage() {
     <div className="min-h-screen">
       {/* Navigation */}
       <MainNav />
+      <section className="relative h-screen overflow-hidden">
+        {/* Background image with parallax effect */}
+        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1600891964092-4316c288032e?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D')] bg-cover bg-center bg-fixed">
+          <div className="absolute inset-0 bg-gradient-to-r from-black/70 to-black/40" />
+        </div>
 
-      {/* Hero Section */}
-      <section className="relative h-[600px] flex items-center justify-center bg-gradient-to-r from-orange-50 to-amber-50">
-        <div className="absolute inset-0 bg-black/20" />
-        <div className="relative z-10 text-center max-w-4xl mx-auto px-4">
-          <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
-            Exceptional Dining
-            <span className="block text-orange-600">Experience</span>
-          </h1>
-          <p className="text-xl text-gray-700 mb-8 max-w-2xl mx-auto">
+        {/* Decorative elements */}
+        <div className="absolute top-20 left-10 w-32 h-32 rounded-full bg-orange-500/10 blur-3xl" />
+        <div className="absolute bottom-20 right-10 w-64 h-64 rounded-full bg-amber-500/20 blur-3xl" />
+
+        {/* Content */}
+        <div className="relative z-10 h-full flex flex-col items-center justify-center px-4">
+          <div className="mb-6 relative">
+            <div className="absolute -inset-1 rounded-full bg-orange-600/20 blur-sm" />
+            <ChefHat className="relative h-12 w-12 text-orange-600" />
+          </div>
+
+          <div className="overflow-hidden mb-2">
+            <h2 className="text-lg font-medium text-orange-500 uppercase tracking-wider animate-fade-in-up">
+              Welcome to Dw
+            </h2>
+          </div>
+
+          <div className="overflow-hidden mb-4">
+            <h1 className="text-5xl md:text-7xl font-bold text-white animate-fade-in-up [animation-delay:200ms]">
+              Exceptional Dining
+              <span className="block text-orange-500 mt-2">Experience</span>
+            </h1>
+          </div>
+
+          <div className="w-24 h-1 bg-gradient-to-r from-orange-600 to-amber-500 my-6 animate-fade-in-up [animation-delay:400ms]" />
+
+          <p className="text-xl text-gray-100 mb-10 max-w-2xl mx-auto text-center animate-fade-in-up [animation-delay:600ms]">
             Discover culinary excellence with our carefully crafted dishes, made
             from the finest ingredients by our award-winning chefs.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="bg-orange-600 hover:bg-orange-700">
-              Reserve a Table
-            </Button>
+
+          <div className="flex flex-wrap justify-center gap-4 mb-10 animate-fade-in-up [animation-delay:800ms]">
+            <Badge className="bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm border-0">
+              Award Winning
+            </Badge>
+            <Badge className="bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm border-0">
+              Fine Dining
+            </Badge>
+            <Badge className="bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm border-0">
+              Local Ingredients
+            </Badge>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in-up [animation-delay:1000ms]">
             <Link href="/menu">
-              <Button size="lg" variant="outline">
-                View Menu
+              <Button
+                size="lg"
+                className="bg-orange-600 hover:bg-orange-700 px-8 rounded-full"
+              >
+                <UtensilsCrossed className="mr-2 h-5 w-5" /> View Menu
               </Button>
             </Link>
+          </div>
+        </div>
+
+        {/* Scroll indicator */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
+          <div className="flex flex-col items-center">
+            <span className="text-white/70 text-sm mb-2">Scroll Down</span>
+            <ChevronDown className="h-5 w-5 text-white/70" />
           </div>
         </div>
       </section>
@@ -96,58 +111,6 @@ export default function HomePage() {
                 </div>
                 <div className="text-gray-600">{stat.label}</div>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Featured Dishes */}
-      <section id="menu" className="py-16 bg-gray-50">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Featured Dishes
-            </h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">
-              Taste our chef's special creations, prepared with passion and the
-              finest ingredients
-            </p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8">
-            {featuredDishes.map((dish, index) => (
-              <Card
-                key={index}
-                className="overflow-hidden hover:shadow-lg transition-shadow"
-              >
-                <div className="relative h-48">
-                  <Image
-                    src={dish.image || "/placeholder.svg"}
-                    alt={dish.name}
-                    fill
-                    className="object-cover"
-                  />
-                  <Badge className="absolute top-4 right-4 bg-white text-gray-900">
-                    <Star className="h-3 w-3 mr-1 fill-yellow-400 text-yellow-400" />
-                    {dish.rating}
-                  </Badge>
-                </div>
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-xl">{dish.name}</CardTitle>
-                    <span className="text-xl font-bold text-orange-600">
-                      {dish.price}
-                    </span>
-                  </div>
-                  <CardDescription>{dish.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Link href="/menu">
-                    <Button className="w-full bg-orange-600 hover:bg-orange-700">
-                      Order Now
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
             ))}
           </div>
         </div>
@@ -177,12 +140,14 @@ export default function HomePage() {
               </Button>
             </div>
             <div className="relative h-96">
-              <Image
-                src="/placeholder.svg?height=400&width=500"
-                alt="Restaurant interior"
-                fill
-                className="object-cover rounded-lg"
-              />
+              <div className="relative w-full h-96 rounded-lg overflow-hidden">
+                <Image
+                  src="https://images.unsplash.com/photo-1505275350441-83dcda8eeef5?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+                  alt="Restaurant interior"
+                  fill
+                  className="object-cover rounded-lg"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -229,9 +194,9 @@ export default function HomePage() {
               <p className="text-gray-300">
                 Phone: (555) 123-4567
                 <br />
-                Email: info@bellavista.com
+                Email: info@dw.com
                 <br />
-                Reservations: book@bellavista.com
+                Reservations: book@dw.com
               </p>
             </div>
           </div>

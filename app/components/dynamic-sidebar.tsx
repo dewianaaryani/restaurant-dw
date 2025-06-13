@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { signOut } from "next-auth/react";
 
 interface NavigationItem {
   title: string;
@@ -42,19 +44,19 @@ const navigationItems: NavigationItem[] = [
     title: "Dashboard",
     url: "/admin",
     icon: LayoutDashboard,
-    roles: ["admin", "staff", "kitchen", "cashier"],
+    roles: ["admin"],
   },
   {
     title: "Category Management",
     url: "/admin/categories",
     icon: FolderOpen,
-    roles: ["admin", "staff"],
+    roles: ["admin"],
   },
   {
     title: "Menu Management",
     url: "/admin/menu",
     icon: UtensilsCrossed,
-    roles: ["admin", "staff"],
+    roles: ["admin"],
   },
   {
     title: "User Management",
@@ -66,38 +68,26 @@ const navigationItems: NavigationItem[] = [
     title: "Order Management",
     url: "/admin/orders",
     icon: ShoppingCart,
-    roles: ["admin", "staff", "cashier"],
-    badge: "12",
+    roles: ["admin", "cashier"],
   },
   {
     title: "Kitchen Orders",
-    url: "/admin/kitchen",
+    url: "/kitchen/orders",
     icon: ChefHat,
-    roles: ["kitchen", "admin"],
-    badge: "5",
+    roles: ["kitchen"],
+    badge: "3",
   },
   {
     title: "Payment Processing",
-    url: "/admin/payments",
+    url: "/cashier/payments",
     icon: CreditCard,
-    roles: ["cashier", "admin"],
-  },
-  {
-    title: "Reviews & Ratings",
-    url: "/admin/reviews",
-    icon: Star,
-    roles: ["admin", "staff"],
+    roles: ["cashier"],
+    badge: "2",
   },
   {
     title: "Analytics",
     url: "/admin/analytics",
     icon: BarChart3,
-    roles: ["admin"],
-  },
-  {
-    title: "Settings",
-    url: "/admin/settings",
-    icon: Settings,
     roles: ["admin"],
   },
 ];
@@ -106,7 +96,7 @@ interface DynamicSidebarProps {
   userRole: string;
 }
 
-export function DynamicSidebar({ userRole = "admin" }: DynamicSidebarProps) {
+export function DynamicSidebar({ userRole = "staff" }: DynamicSidebarProps) {
   const filteredItems = navigationItems.filter((item) =>
     item.roles.includes(userRole)
   );
@@ -172,10 +162,14 @@ export function DynamicSidebar({ userRole = "admin" }: DynamicSidebarProps) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <Link href="/">
-                <LogOut className="h-4 w-4" />
-                <span>Back to Website</span>
-              </Link>
+              <Button
+                variant="outline"
+                className="w-full justify-start text-red-600"
+                onClick={async () => await signOut()}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Log out
+              </Button>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
