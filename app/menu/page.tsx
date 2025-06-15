@@ -26,6 +26,7 @@ import Image from "next/image";
 import { MainNav } from "../components/main-nav";
 import { useCart } from "@/context/cart-context";
 import { toast } from "sonner";
+import { formatRupiah } from "@/utils/formatter";
 
 interface MenuItem {
   id: string;
@@ -203,7 +204,7 @@ function MenuItemCard({ item }: { item: MenuItem }) {
 
   const handleAddToCart = () => {
     addItem({
-      id: parseInt(item.id), // Convert string ID to number for cart
+      id: item.id,
       name: item.name,
       price: item.price,
       quantity: quantity,
@@ -222,16 +223,14 @@ function MenuItemCard({ item }: { item: MenuItem }) {
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow">
       <div className="relative h-48">
+        {/* TODO IMAGe FULL the contain,*/}
         <Image
           src={item.image || "/placeholder.svg"}
           alt={item.name}
           fill
           className="object-cover"
         />
-        <Badge className="absolute top-4 right-4 bg-white text-gray-900">
-          <Star className="h-3 w-3 mr-1 fill-yellow-400 text-yellow-400" />
-          {item.rating.toFixed(1)}
-        </Badge>
+
         {!item.is_available && (
           <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
             <Badge variant="destructive" className="text-white">
@@ -244,7 +243,7 @@ function MenuItemCard({ item }: { item: MenuItem }) {
         <div className="flex justify-between items-start">
           <CardTitle className="text-xl">{item.name}</CardTitle>
           <span className="text-xl font-bold text-orange-600">
-            ${item.price.toFixed(2)}
+            {formatRupiah(item.price)}
           </span>
         </div>
         <CardDescription>
@@ -327,7 +326,7 @@ function MenuItemCard({ item }: { item: MenuItem }) {
             </div>
             <div className="flex justify-between items-center">
               <span className="font-medium">
-                Total: ${(item.price * quantity).toFixed(2)}
+                Total: {formatRupiah(item.price * quantity)}
               </span>
               <Button
                 onClick={handleAddToCart}

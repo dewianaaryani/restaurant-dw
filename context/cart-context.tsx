@@ -9,7 +9,7 @@ import {
 } from "react";
 
 export interface CartItem {
-  id: number;
+  id: string; // Changed from number to string
   name: string;
   price: number;
   quantity: number;
@@ -22,8 +22,8 @@ export interface CartItem {
 interface CartContextType {
   items: CartItem[];
   addItem: (item: CartItem) => void;
-  removeItem: (id: number) => void;
-  updateQuantity: (id: number, quantity: number) => void;
+  removeItem: (id: string) => void; // Changed from number to string
+  updateQuantity: (id: string, quantity: number) => void; // Changed from number to string
   clearCart: () => void;
   totalItems: number;
   subtotal: number;
@@ -46,21 +46,39 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const savedCart = localStorage.getItem("restaurant-cart");
     if (savedCart) {
       try {
-        setItems(JSON.parse(savedCart));
+        const parsedCart = JSON.parse(savedCart);
+        // Validate that the cart items have string IDs
+        const validatedCart = parsedCart.filter(
+          (item: CartItem) =>
+            item && typeof item.id === "string" && item.id.trim() !== ""
+        );
+        setItems(validatedCart);
       } catch (e) {
         console.error("Failed to parse saved cart", e);
+        // Clear invalid cart data
+        localStorage.removeItem("restaurant-cart");
       }
     }
   }, []);
 
   // Save cart to localStorage whenever it changes
   useEffect(() => {
-    if (isClient && items.length > 0) {
-      localStorage.setItem("restaurant-cart", JSON.stringify(items));
+    if (isClient) {
+      if (items.length > 0) {
+        localStorage.setItem("restaurant-cart", JSON.stringify(items));
+      } else {
+        localStorage.removeItem("restaurant-cart");
+      }
     }
   }, [items, isClient]);
 
   const addItem = (newItem: CartItem) => {
+    // Validate that the new item has a valid string ID
+    if (!newItem.id || typeof newItem.id !== "string") {
+      console.error("Cannot add item without valid string ID:", newItem);
+      return;
+    }
+
     setItems((prevItems) => {
       const existingItemIndex = prevItems.findIndex(
         (item) => item.id === newItem.id
@@ -81,11 +99,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setIsCartOpen(true);
   };
 
-  const removeItem = (id: number) => {
+  const removeItem = (id: string) => {
     setItems((prevItems) => prevItems.filter((item) => item.id !== id));
   };
 
-  const updateQuantity = (id: number, quantity: number) => {
+  const updateQuantity = (id: string, quantity: number) => {
     if (quantity <= 0) {
       removeItem(id);
       return;

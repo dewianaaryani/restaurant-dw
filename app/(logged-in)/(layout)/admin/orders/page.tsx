@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,159 +26,148 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
-  XCircle,
-  Download,
-  DollarSign,
+  Loader2,
+  X,
 } from "lucide-react";
-
-interface OrderItem {
-  id: number;
-  order_id: string;
-  menu_id: string;
-  menu_name: string;
-  price: number;
-  quantity: number;
-  subtotal: number;
-  customization?: string;
-}
-
-interface Order {
-  id: number;
-  customer_id: string;
-  customer_name: string;
-  customer_email: string;
-  table_number: number;
-  order_status: string;
-  payment_status: string;
-  total_amount: number;
-  order_time: string;
-  completed_time?: string;
-  kasir_id?: string;
-  items: OrderItem[];
-}
+import { Order, OrderStatus, PaymentStatus } from "@/types";
+import RefreshButton from "@/app/components/refresh-button";
+import { toast } from "sonner";
+import { formatRupiah } from "@/utils/formatter";
 
 export default function OrderManagement() {
-  const [orders, setOrders] = useState<Order[]>([
-    {
-      id: 1,
-      customer_id: "1",
-      customer_name: "John Doe",
-      customer_email: "john@example.com",
-      table_number: 5,
-      order_status: "completed",
-      payment_status: "paid",
-      total_amount: 65.0,
-      order_time: "2024-01-15T19:30:00Z",
-      completed_time: "2024-01-15T20:15:00Z",
-      kasir_id: "4",
-      items: [
-        {
-          id: 1,
-          order_id: "1",
-          menu_id: "1",
-          menu_name: "Grilled Salmon",
-          price: 28.0,
-          quantity: 1,
-          subtotal: 28.0,
-        },
-        {
-          id: 2,
-          order_id: "1",
-          menu_id: "4",
-          menu_name: "House Wine",
-          price: 15.0,
-          quantity: 2,
-          subtotal: 30.0,
-        },
-        {
-          id: 3,
-          order_id: "1",
-          menu_id: "8",
-          menu_name: "Chocolate Cake",
-          price: 7.0,
-          quantity: 1,
-          subtotal: 7.0,
-        },
-      ],
-    },
-    {
-      id: 2,
-      customer_id: "2",
-      customer_name: "Jane Smith",
-      customer_email: "jane@example.com",
-      table_number: 2,
-      order_status: "preparing",
-      payment_status: "pending",
-      total_amount: 78.5,
-      order_time: "2024-01-15T20:15:00Z",
-      items: [
-        {
-          id: 4,
-          order_id: "2",
-          menu_id: "2",
-          menu_name: "Beef Wellington",
-          price: 45.0,
-          quantity: 1,
-          subtotal: 45.0,
-        },
-        {
-          id: 5,
-          order_id: "2",
-          menu_id: "5",
-          menu_name: "Caesar Salad",
-          price: 16.0,
-          quantity: 1,
-          subtotal: 16.0,
-        },
-        {
-          id: 6,
-          order_id: "2",
-          menu_id: "6",
-          menu_name: "Red Wine",
-          price: 17.5,
-          quantity: 1,
-          subtotal: 17.5,
-        },
-      ],
-    },
-    {
-      id: 3,
-      customer_id: "3",
-      customer_name: "Mike Johnson",
-      customer_email: "mike@example.com",
-      table_number: 8,
-      order_status: "pending",
-      payment_status: "pending",
-      total_amount: 38.0,
-      order_time: "2024-01-15T20:45:00Z",
-      items: [
-        {
-          id: 7,
-          order_id: "3",
-          menu_id: "3",
-          menu_name: "Truffle Risotto",
-          price: 32.0,
-          quantity: 1,
-          subtotal: 32.0,
-          customization: "Extra truffle",
-        },
-        {
-          id: 8,
-          order_id: "3",
-          menu_id: "7",
-          menu_name: "Garlic Bread",
-          price: 6.0,
-          quantity: 1,
-          subtotal: 6.0,
-        },
-      ],
-    },
-  ]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Filter states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [paymentFilter, setPaymentFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<string>("all");
+
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/admin/orders");
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch orders");
+      }
+
+      const data = await response.json();
+      setOrders(data);
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      toast.error("Failed to fetch orders");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
 
-  const getStatusBadge = (status: string) => {
+  // Filter and search logic
+  const filteredOrders = useMemo(() => {
+    let filtered = orders;
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter((order) => {
+        return (
+          order.id.toLowerCase().includes(query) ||
+          order.customer.name?.toLowerCase().includes(query) ||
+          order.customer.email.toLowerCase().includes(query) ||
+          order.table_number.toString().includes(query) ||
+          order.order_items.some((item) =>
+            item.menu.name.toLowerCase().includes(query)
+          )
+        );
+      });
+    }
+
+    // Status filter
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(
+        (order) => order.order_status === statusFilter
+      );
+    }
+
+    // Payment filter
+    if (paymentFilter !== "all") {
+      filtered = filtered.filter(
+        (order) => order.payment_status === paymentFilter
+      );
+    }
+
+    // Date filter
+    if (dateFilter !== "all") {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      switch (dateFilter) {
+        case "today":
+          filtered = filtered.filter((order) => {
+            const orderDate = new Date(order.order_time);
+            orderDate.setHours(0, 0, 0, 0);
+            return orderDate.getTime() === today.getTime();
+          });
+          break;
+        case "yesterday":
+          const yesterday = new Date(today);
+          yesterday.setDate(yesterday.getDate() - 1);
+          filtered = filtered.filter((order) => {
+            const orderDate = new Date(order.order_time);
+            orderDate.setHours(0, 0, 0, 0);
+            return orderDate.getTime() === yesterday.getTime();
+          });
+          break;
+        case "week":
+          const weekAgo = new Date(today);
+          weekAgo.setDate(weekAgo.getDate() - 7);
+          filtered = filtered.filter((order) => {
+            const orderDate = new Date(order.order_time);
+            return orderDate >= weekAgo;
+          });
+          break;
+        case "month":
+          const monthAgo = new Date(today);
+          monthAgo.setMonth(monthAgo.getMonth() - 1);
+          filtered = filtered.filter((order) => {
+            const orderDate = new Date(order.order_time);
+            return orderDate >= monthAgo;
+          });
+          break;
+      }
+    }
+
+    // Sort by order time (newest first)
+    return filtered.sort(
+      (a, b) =>
+        new Date(b.order_time).getTime() - new Date(a.order_time).getTime()
+    );
+  }, [orders, searchQuery, statusFilter, paymentFilter, dateFilter]);
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setPaymentFilter("all");
+    setDateFilter("all");
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters =
+    searchQuery ||
+    statusFilter !== "all" ||
+    paymentFilter !== "all" ||
+    dateFilter !== "all";
+
+  const getStatusBadge = (status: OrderStatus) => {
     switch (status) {
       case "completed":
         return (
@@ -187,11 +176,11 @@ export default function OrderManagement() {
             Completed
           </Badge>
         );
-      case "preparing":
+      case "cooking":
         return (
           <Badge className="bg-blue-100 text-blue-800">
             <Clock className="h-3 w-3 mr-1" />
-            Preparing
+            Cooking
           </Badge>
         );
       case "pending":
@@ -208,102 +197,35 @@ export default function OrderManagement() {
             Ready
           </Badge>
         );
-      case "cancelled":
-        return (
-          <Badge className="bg-red-100 text-red-800">
-            <XCircle className="h-3 w-3 mr-1" />
-            Cancelled
-          </Badge>
-        );
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
-  const getPaymentStatusBadge = (status: string) => {
+  const getPaymentStatusBadge = (status: PaymentStatus) => {
     switch (status) {
       case "paid":
         return <Badge className="bg-green-100 text-green-800">Paid</Badge>;
       case "pending":
         return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>;
-      case "failed":
-        return <Badge className="bg-red-100 text-red-800">Failed</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
-  const updateOrderStatus = (orderId: number, newStatus: string) => {
-    setOrders(
-      orders.map((order) =>
-        order.id === orderId
-          ? {
-              ...order,
-              order_status: newStatus,
-              completed_time:
-                newStatus === "completed"
-                  ? new Date().toISOString()
-                  : order.completed_time,
-            }
-          : order
-      )
+  if (loading) {
+    return (
+      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </div>
     );
-  };
-
-  const updatePaymentStatus = (orderId: number, newStatus: string) => {
-    setOrders(
-      orders.map((order) =>
-        order.id === orderId ? { ...order, payment_status: newStatus } : order
-      )
-    );
-  };
+  }
 
   const viewOrderDetails = (order: Order) => {
     setSelectedOrder(order);
     setIsDetailDialogOpen(true);
-  };
-
-  const getStatusActions = (order: Order) => {
-    switch (order.order_status) {
-      case "pending":
-        return (
-          <div className="flex space-x-2">
-            <Button
-              size="sm"
-              onClick={() => updateOrderStatus(order.id, "preparing")}
-            >
-              Accept
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => updateOrderStatus(order.id, "cancelled")}
-            >
-              Decline
-            </Button>
-          </div>
-        );
-      case "preparing":
-        return (
-          <Button
-            size="sm"
-            onClick={() => updateOrderStatus(order.id, "ready")}
-          >
-            Mark Ready
-          </Button>
-        );
-      case "ready":
-        return (
-          <Button
-            size="sm"
-            onClick={() => updateOrderStatus(order.id, "completed")}
-          >
-            Mark Served
-          </Button>
-        );
-      default:
-        return null;
-    }
   };
 
   return (
@@ -316,41 +238,52 @@ export default function OrderManagement() {
           </h2>
         </div>
         <div className="flex items-center space-x-2">
-          <Button variant="outline">
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
+          <RefreshButton />
         </div>
       </div>
 
       {/* Search and Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Search & Filter Orders</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Search & Filter Orders</CardTitle>
+            {hasActiveFilters && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearFilters}
+                className="text-muted-foreground"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Clear Filters
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by order ID or customer..."
+                placeholder="Search by order ID, customer, table, or menu..."
                 className="pl-8"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="preparing">Preparing</SelectItem>
+                <SelectItem value="cooking">Cooking</SelectItem>
                 <SelectItem value="ready">Ready</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
-            <Select>
+            <Select value={paymentFilter} onValueChange={setPaymentFilter}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Payment Status" />
               </SelectTrigger>
@@ -358,104 +291,172 @@ export default function OrderManagement() {
                 <SelectItem value="all">All Payments</SelectItem>
                 <SelectItem value="paid">Paid</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline">Today</Button>
+            <Select value={dateFilter} onValueChange={setDateFilter}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Date Range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="yesterday">Yesterday</SelectItem>
+                <SelectItem value="week">Last 7 Days</SelectItem>
+                <SelectItem value="month">Last 30 Days</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+
+          {/* Active filters display */}
+          {hasActiveFilters && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {searchQuery && (
+                <Badge variant="secondary" className="text-xs">
+                  Search: &quot;{searchQuery}&quot;
+                </Badge>
+              )}
+              {statusFilter !== "all" && (
+                <Badge variant="secondary" className="text-xs">
+                  Status: {statusFilter}
+                </Badge>
+              )}
+              {paymentFilter !== "all" && (
+                <Badge variant="secondary" className="text-xs">
+                  Payment: {paymentFilter}
+                </Badge>
+              )}
+              {dateFilter !== "all" && (
+                <Badge variant="secondary" className="text-xs">
+                  Date:{" "}
+                  {dateFilter === "today"
+                    ? "Today"
+                    : dateFilter === "yesterday"
+                    ? "Yesterday"
+                    : dateFilter === "week"
+                    ? "Last 7 Days"
+                    : dateFilter === "month"
+                    ? "Last 30 Days"
+                    : dateFilter}
+                </Badge>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
+      {/* Results Summary */}
+      {hasActiveFilters && (
+        <div className="text-sm text-muted-foreground">
+          Showing {filteredOrders.length} of {orders.length} orders
+        </div>
+      )}
+
       {/* Orders List */}
       <div className="grid gap-4">
-        {orders.map((order) => (
-          <Card key={order.id}>
-            <CardContent className="p-6">
-              <div className="flex flex-col lg:flex-row gap-4">
-                <div className="flex-1 space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center space-x-3">
-                        <h3 className="text-lg font-semibold">
-                          #ORD-{order.id.toString().padStart(3, "0")}
-                        </h3>
-                        {getStatusBadge(order.order_status)}
-                        {getPaymentStatusBadge(order.payment_status)}
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {order.customer_name} • {order.customer_email}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Table {order.table_number} •{" "}
-                        {new Date(order.order_time).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-orange-600">
-                        ${order.total_amount.toFixed(2)}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {order.items.length} items
-                      </p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-medium mb-2">Order Items:</p>
-                    <div className="space-y-1">
-                      {order.items.slice(0, 3).map((item, index) => (
-                        <div
-                          key={index}
-                          className="flex justify-between text-sm"
-                        >
-                          <span>
-                            {item.quantity}x {item.menu_name}
-                            {item.customization && (
-                              <span className="text-muted-foreground">
-                                {" "}
-                                ({item.customization})
-                              </span>
-                            )}
-                          </span>
-                          <span>${item.subtotal.toFixed(2)}</span>
-                        </div>
-                      ))}
-                      {order.items.length > 3 && (
-                        <p className="text-sm text-muted-foreground">
-                          +{order.items.length - 3} more items
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2">
+        {filteredOrders.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <div className="text-muted-foreground">
+                {hasActiveFilters ? (
+                  <>
+                    <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p>No orders found matching your filters.</p>
                     <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => viewOrderDetails(order)}
+                      variant="link"
+                      onClick={clearFilters}
+                      className="mt-2"
                     >
-                      <Eye className="h-4 w-4 mr-2" />
-                      View Details
+                      Clear filters to see all orders
                     </Button>
-                    <div className="flex space-x-2">
-                      {order.payment_status === "pending" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => updatePaymentStatus(order.id, "paid")}
-                        >
-                          <DollarSign className="h-4 w-4 mr-2" />
-                          Mark Paid
-                        </Button>
-                      )}
-                      {getStatusActions(order)}
-                    </div>
-                  </div>
-                </div>
+                  </>
+                ) : (
+                  <p>No orders available.</p>
+                )}
               </div>
             </CardContent>
           </Card>
-        ))}
+        ) : (
+          filteredOrders.map((order) => (
+            <Card key={order.id}>
+              <CardContent className="p-6">
+                <div className="flex flex-col lg:flex-row gap-4">
+                  <div className="flex-1 space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center space-x-3">
+                          <h3 className="text-lg font-semibold">
+                            #{order.id.toUpperCase()}
+                          </h3>
+                          {getStatusBadge(order.order_status)}
+                          {getPaymentStatusBadge(order.payment_status)}
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {order.customer.name} • {order.customer.email}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Table {order.table_number} •{" "}
+                          {new Date(order.order_time).toLocaleString()}
+                        </p>
+                        {order.kasir && (
+                          <p className="text-sm text-muted-foreground">
+                            Cashier: {order.kasir.name}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-orange-600">
+                          {formatRupiah(order.total_amount)}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {order.order_items.length} items
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-medium mb-2">Order Items:</p>
+                      <div className="space-y-1">
+                        {order.order_items.slice(0, 3).map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex justify-between text-sm"
+                          >
+                            <span>
+                              {item.quantity}x {item.menu.name}
+                              {item.customization && (
+                                <span className="text-muted-foreground">
+                                  {" "}
+                                  ({item.customization})
+                                </span>
+                              )}
+                            </span>
+                            <span>{formatRupiah(item.subtotal)}</span>
+                          </div>
+                        ))}
+                        {order.order_items.length > 3 && (
+                          <p className="text-sm text-muted-foreground">
+                            +{order.order_items.length - 3} more items
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => viewOrderDetails(order)}
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        View Details
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
 
       {/* Order Details Dialog */}
@@ -463,8 +464,7 @@ export default function OrderManagement() {
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>
-              Order Details - #ORD-
-              {selectedOrder?.id.toString().padStart(3, "0")}
+              Order Details - #{selectedOrder?.id.toUpperCase()}
             </DialogTitle>
             <DialogDescription>
               Complete order information and items
@@ -475,9 +475,9 @@ export default function OrderManagement() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h4 className="font-semibold mb-2">Customer Information</h4>
-                  <p className="text-sm">{selectedOrder.customer_name}</p>
+                  <p className="text-sm">{selectedOrder.customer.name}</p>
                   <p className="text-sm text-muted-foreground">
-                    {selectedOrder.customer_email}
+                    {selectedOrder.customer.email}
                   </p>
                   <p className="text-sm text-muted-foreground">
                     Table {selectedOrder.table_number}
@@ -495,6 +495,11 @@ export default function OrderManagement() {
                       {new Date(selectedOrder.completed_time).toLocaleString()}
                     </p>
                   )}
+                  {selectedOrder.kasir && (
+                    <p className="text-sm">
+                      Processed by: {selectedOrder.kasir.name}
+                    </p>
+                  )}
                   <div className="flex space-x-2 mt-2">
                     {getStatusBadge(selectedOrder.order_status)}
                     {getPaymentStatusBadge(selectedOrder.payment_status)}
@@ -505,16 +510,21 @@ export default function OrderManagement() {
               <div>
                 <h4 className="font-semibold mb-2">Order Items</h4>
                 <div className="space-y-2">
-                  {selectedOrder.items.map((item, index) => (
+                  {selectedOrder.order_items.map((item) => (
                     <div
-                      key={index}
+                      key={item.id}
                       className="flex justify-between items-center p-2 border rounded"
                     >
                       <div>
-                        <p className="font-medium">{item.menu_name}</p>
+                        <p className="font-medium">{item.menu.name}</p>
                         <p className="text-sm text-muted-foreground">
-                          ${item.price.toFixed(2)} x {item.quantity}
+                          {formatRupiah(item.price)} x {item.quantity}
                         </p>
+                        {item.menu.desc && (
+                          <p className="text-xs text-muted-foreground">
+                            {item.menu.desc}
+                          </p>
+                        )}
                         {item.customization && (
                           <p className="text-sm text-blue-600">
                             Note: {item.customization}
@@ -522,7 +532,7 @@ export default function OrderManagement() {
                         )}
                       </div>
                       <p className="font-semibold">
-                        ${item.subtotal.toFixed(2)}
+                        {formatRupiah(item.subtotal)}
                       </p>
                     </div>
                   ))}
@@ -530,7 +540,7 @@ export default function OrderManagement() {
                 <div className="flex justify-between items-center pt-4 border-t font-bold text-lg">
                   <span>Total:</span>
                   <span className="text-orange-600">
-                    ${selectedOrder.total_amount.toFixed(2)}
+                    {formatRupiah(selectedOrder.total_amount)}
                   </span>
                 </div>
               </div>
@@ -546,8 +556,10 @@ export default function OrderManagement() {
             <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{orders.length}</div>
-            <p className="text-xs text-muted-foreground">All time</p>
+            <div className="text-2xl font-bold">{filteredOrders.length}</div>
+            <p className="text-xs text-muted-foreground">
+              {hasActiveFilters ? "Filtered" : "All time"}
+            </p>
           </CardContent>
         </Card>
 
@@ -558,8 +570,9 @@ export default function OrderManagement() {
           <CardContent>
             <div className="text-2xl font-bold text-yellow-600">
               {
-                orders.filter((order) => order.order_status === "pending")
-                  .length
+                filteredOrders.filter(
+                  (order) => order.order_status === "pending"
+                ).length
               }
             </div>
             <p className="text-xs text-muted-foreground">Needs attention</p>
@@ -568,13 +581,14 @@ export default function OrderManagement() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Preparing</CardTitle>
+            <CardTitle className="text-sm font-medium">Cooking</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
               {
-                orders.filter((order) => order.order_status === "preparing")
-                  .length
+                filteredOrders.filter(
+                  (order) => order.order_status === "cooking"
+                ).length
               }
             </div>
             <p className="text-xs text-muted-foreground">In kitchen</p>
@@ -588,8 +602,9 @@ export default function OrderManagement() {
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
               {
-                orders.filter((order) => order.order_status === "completed")
-                  .length
+                filteredOrders.filter(
+                  (order) => order.order_status === "completed"
+                ).length
               }
             </div>
             <p className="text-xs text-muted-foreground">Success rate</p>
@@ -602,12 +617,16 @@ export default function OrderManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              $
-              {orders
-                .reduce((sum, order) => sum + order.total_amount, 0)
-                .toFixed(2)}
+              {formatRupiah(
+                filteredOrders.reduce(
+                  (sum, order) => sum + order.total_amount,
+                  0
+                )
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">Total revenue</p>
+            <p className="text-xs text-muted-foreground">
+              {hasActiveFilters ? "Filtered" : "Total"} revenue
+            </p>
           </CardContent>
         </Card>
       </div>

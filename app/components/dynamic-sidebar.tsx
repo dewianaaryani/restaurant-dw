@@ -18,12 +18,10 @@ import {
   Users,
   ShoppingCart,
   BarChart3,
-  Settings,
   ChefHat,
   LogOut,
   FolderOpen,
   CreditCard,
-  Star,
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -68,25 +66,23 @@ const navigationItems: NavigationItem[] = [
     title: "Order Management",
     url: "/admin/orders",
     icon: ShoppingCart,
-    roles: ["admin", "cashier"],
+    roles: ["admin"],
   },
   {
     title: "Kitchen Orders",
     url: "/kitchen/orders",
     icon: ChefHat,
     roles: ["kitchen"],
-    badge: "3",
   },
   {
     title: "Payment Processing",
     url: "/cashier/payments",
     icon: CreditCard,
     roles: ["cashier"],
-    badge: "2",
   },
   {
-    title: "Analytics",
-    url: "/admin/analytics",
+    title: "Reports",
+    url: "/admin/reports",
     icon: BarChart3,
     roles: ["admin"],
   },

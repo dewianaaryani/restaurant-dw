@@ -3,7 +3,6 @@
 import type React from "react";
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ChefHat, ArrowLeft } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -28,7 +27,9 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { signIn, useSession } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 // Zod schema for validation
 const loginSchema = z.object({
@@ -70,10 +71,25 @@ export default function LoginPage() {
     if (result?.error) {
       setError("Invalid credentials. Please try again.");
     } else if (result?.ok) {
-      // Successful login
-      router.push("/dashboard");
-      router.refresh();
+      toast.success("Login successful");
+      // Ambil session setelah berhasil login
+      const session = await getSession();
+
+      const role = session?.user?.role;
+      console.log("Role:", role);
+
+      // Redirect sesuai role
+      if (role === "admin") {
+        router.push("/admin");
+      } else if (role === "cashier") {
+        router.push("/cashier");
+      } else if (role === "kitchen") {
+        router.push("/kitchen");
+      } else if (role === "customer") {
+        router.push("/menu");
+      }
     }
+
     setIsLoading(false);
   };
 

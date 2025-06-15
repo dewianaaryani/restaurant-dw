@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart, X, Plus, Minus } from "lucide-react";
+import { ShoppingCart, X, Plus, Minus, Loader2 } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -24,6 +24,9 @@ import {
 import { Label } from "@/components/ui/label";
 import Image from "next/image";
 import { CartItem, useCart } from "@/context/cart-context";
+import { formatRupiah } from "@/utils/formatter";
+import { toast } from "sonner";
+import Link from "next/link";
 
 export function ShoppingCartButton() {
   const { totalItems, isCartOpen, setIsCartOpen } = useCart();
@@ -46,26 +49,70 @@ export function ShoppingCartButton() {
 }
 
 function ShoppingCartPanel() {
-  const { items, removeItem, updateQuantity, clearCart, subtotal } = useCart();
+  const { items, clearCart, subtotal, setIsCartOpen } = useCart();
   const [isCheckoutDialogOpen, setIsCheckoutDialogOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [checkoutInfo, setCheckoutInfo] = useState({
-    name: "",
-    email: "",
     tableNumber: "",
-    specialInstructions: "",
   });
 
-  const handleCheckout = () => {
-    // In a real app, this would send the order to your backend
-    console.log("Order placed:", {
-      customer: checkoutInfo,
-      items,
-      subtotal,
-    });
+  const handleCheckout = async () => {
+    if (!checkoutInfo.tableNumber) {
+      toast.error("Please enter a table number");
+      return;
+    }
 
-    // Clear cart and close dialogs
-    clearCart();
-    setIsCheckoutDialogOpen(false);
+    const tableNum = parseInt(checkoutInfo.tableNumber);
+    if (isNaN(tableNum) || tableNum <= 0) {
+      toast.error("Invalid table number");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tableNumber: tableNum,
+          items: items.map((item) => ({
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            customization: item.customization,
+          })),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to place order");
+      }
+      console.log(data);
+
+      // Success
+      toast.success("Order placed successfully, Check your oder");
+
+      // Clear cart and close dialogs
+      clearCart();
+      setIsCheckoutDialogOpen(false);
+      setIsCartOpen(false);
+
+      // Reset checkout info
+      setCheckoutInfo({
+        tableNumber: "",
+      });
+    } catch (error) {
+      console.error("Checkout error:", error);
+      toast.error("Failed to place order");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -82,7 +129,9 @@ function ShoppingCartPanel() {
             Add some delicious items from our menu to get started.
           </p>
           <SheetClose asChild>
-            <Button className="mt-6">Browse Menu</Button>
+            <Button className="mt-6" asChild>
+              <Link href="/menu">Browse Menu</Link>
+            </Button>
           </SheetClose>
         </div>
       ) : (
@@ -96,23 +145,32 @@ function ShoppingCartPanel() {
           </div>
 
           <div className="border-t py-4 px-4">
-            <div className="flex justify-between text-sm mb-2">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span>${subtotal.toFixed(2)}</span>
-            </div>
             <div className="flex justify-between font-medium mb-6">
               <span>Total</span>
-              <span>${subtotal.toFixed(2)}</span>
+              <span>{formatRupiah(subtotal)}</span>
             </div>
 
             <div className="space-y-2">
               <Button
                 className="w-full bg-orange-600 hover:bg-orange-700"
                 onClick={() => setIsCheckoutDialogOpen(true)}
+                disabled={isLoading}
               >
-                Checkout
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  "Checkout"
+                )}
               </Button>
-              <Button variant="outline" className="w-full" onClick={clearCart}>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={clearCart}
+                disabled={isLoading}
+              >
                 Clear Cart
               </Button>
             </div>
@@ -126,16 +184,19 @@ function ShoppingCartPanel() {
               <DialogHeader>
                 <DialogTitle>Complete Your Order</DialogTitle>
                 <DialogDescription>
-                  Please provide your information to complete the order.
+                  Please provide your table information to complete the order.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="table" className="text-right">
-                    Table #
+                    Table #*
                   </Label>
                   <Input
                     id="table"
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 5"
                     value={checkoutInfo.tableNumber}
                     onChange={(e) =>
                       setCheckoutInfo({
@@ -144,12 +205,32 @@ function ShoppingCartPanel() {
                       })
                     }
                     className="col-span-3"
+                    disabled={isLoading}
                   />
                 </div>
               </div>
               <DialogFooter>
-                <Button type="submit" onClick={handleCheckout}>
-                  Place Order (${subtotal.toFixed(2)})
+                <Button
+                  variant="outline"
+                  onClick={() => setIsCheckoutDialogOpen(false)}
+                  disabled={isLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  onClick={handleCheckout}
+                  disabled={isLoading || !checkoutInfo.tableNumber}
+                  className="bg-orange-600 hover:bg-orange-700"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Placing Order...
+                    </>
+                  ) : (
+                    `Place Order (${formatRupiah(subtotal)})`
+                  )}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -186,7 +267,7 @@ function CartItemCard({ item }: { item: CartItem }) {
         </div>
 
         <p className="text-sm text-muted-foreground">
-          ${item.price.toFixed(2)}
+          {formatRupiah(item.price)}
         </p>
 
         {item.customization && (
@@ -212,7 +293,7 @@ function CartItemCard({ item }: { item: CartItem }) {
             </button>
           </div>
           <span className="font-medium">
-            ${(item.price * item.quantity).toFixed(2)}
+            {formatRupiah(item.price * item.quantity)}
           </span>
         </div>
       </div>

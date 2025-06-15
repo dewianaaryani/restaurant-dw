@@ -1,8 +1,6 @@
 // app/api/users/[id]/role/route.ts
+import prisma from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
 
 enum Role {
   admin = "admin",
@@ -17,11 +15,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const userId = parseInt(params.id);
-
-    if (isNaN(userId)) {
-      return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
-    }
+    const userId = params.id;
 
     const body = await request.json();
     const { role } = body;
@@ -69,7 +63,6 @@ export async function PATCH(
       },
     });
 
-    console.log("Successfully updated user:", updatedUser);
     return NextResponse.json(updatedUser);
   } catch (error) {
     console.error("Error updating user role:", error);
@@ -97,11 +90,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const userId = parseInt(params.id);
-
-    if (isNaN(userId)) {
-      return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
-    }
+    const userId = params.id;
 
     const user = await prisma.user.findUnique({
       where: { id: userId },

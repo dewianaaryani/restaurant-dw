@@ -14,94 +14,36 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Clock, CheckCircle, XCircle, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { MainNav } from "../components/main-nav";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-
-// Mock order data
-const mockOrders = [
-  {
-    id: "ORD-001",
-    date: "2024-06-10T18:30:00Z",
-    status: "completed",
-    total: 65.0,
-    items: [
-      { name: "Grilled Salmon", quantity: 1, price: 28.0 },
-      { name: "House Wine", quantity: 2, price: 15.0 },
-      { name: "Chocolate Cake", quantity: 1, price: 7.0 },
-    ],
-  },
-  {
-    id: "ORD-002",
-    date: "2024-06-12T19:15:00Z",
-    status: "in-progress",
-    total: 78.5,
-    items: [
-      { name: "Beef Wellington", quantity: 1, price: 45.0 },
-      { name: "Caesar Salad", quantity: 1, price: 16.0 },
-      { name: "Red Wine", quantity: 1, price: 17.5 },
-    ],
-  },
-  {
-    id: "ORD-003",
-    date: "2024-06-13T20:45:00Z",
-    status: "cancelled",
-    total: 38.0,
-    items: [
-      { name: "Truffle Risotto", quantity: 1, price: 32.0 },
-      { name: "Garlic Bread", quantity: 1, price: 6.0 },
-    ],
-  },
-];
+import { Order } from "@/types";
+import { formatRupiah } from "@/utils/formatter";
 
 export default function OrdersPage() {
-  const router = useRouter();
-  ///old way///
-  //const { user, isLoadingAuth } = useAuth();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { data: session } = useSession();
 
-  // BERDASARKAN NEXTAUTH
-  const { data: session, status } = useSession();
-  const isLoadingAuth = status === "loading";
-  const user = session?.user || {
-    name: "Guest",
-    email: "guest@example.com",
-    image: "/placeholder.svg",
-    role: "guest",
-    id: "guest",
-  };
-  // Redirect if not logged in
-  if (!isLoadingAuth && !user) {
-    router.push("/login");
-    return null;
-  }
+  useEffect(() => {
+    if (!session) return;
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "completed":
-        return (
-          <Badge className="bg-green-100 text-green-800">
-            <CheckCircle className="h-3 w-3 mr-1" />
-            Completed
-          </Badge>
-        );
-      case "in-progress":
-        return (
-          <Badge className="bg-blue-100 text-blue-800">
-            <Clock className="h-3 w-3 mr-1" />
-            In Progress
-          </Badge>
-        );
-      case "cancelled":
-        return (
-          <Badge className="bg-red-100 text-red-800">
-            <XCircle className="h-3 w-3 mr-1" />
-            Cancelled
-          </Badge>
-        );
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
-  };
+    const fetchOrders = async () => {
+      try {
+        const res = await fetch("/api/users/orders");
+        if (!res.ok) throw new Error("Failed to fetch orders");
+        const data = await res.json();
+        setOrders(data);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  if (isLoadingAuth) {
+    fetchOrders();
+  }, [session]);
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
         <MainNav />
@@ -122,16 +64,18 @@ export default function OrdersPage() {
           <h1 className="text-3xl font-bold mb-6">My Orders</h1>
 
           <Tabs defaultValue="all" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="all">All Orders</TabsTrigger>
-              <TabsTrigger value="in-progress">In Progress</TabsTrigger>
+              <TabsTrigger value="pending">Pending</TabsTrigger>
+              <TabsTrigger value="cooking">Cooking</TabsTrigger>
+              <TabsTrigger value="Ready">Ready</TabsTrigger>
               <TabsTrigger value="completed">Completed</TabsTrigger>
             </TabsList>
 
             <TabsContent value="all">
               <div className="space-y-4 mt-4">
-                {mockOrders.length > 0 ? (
-                  mockOrders.map((order) => (
+                {orders.length > 0 ? (
+                  orders.map((order) => (
                     <OrderCard key={order.id} order={order} />
                   ))
                 ) : (
@@ -140,12 +84,36 @@ export default function OrdersPage() {
               </div>
             </TabsContent>
 
-            <TabsContent value="in-progress">
+            <TabsContent value="pending">
               <div className="space-y-4 mt-4">
-                {mockOrders.filter((order) => order.status === "in-progress")
+                {orders.filter((order) => order.order_status === "pending")
                   .length > 0 ? (
-                  mockOrders
-                    .filter((order) => order.status === "in-progress")
+                  orders
+                    .filter((order) => order.order_status === "pending")
+                    .map((order) => <OrderCard key={order.id} order={order} />)
+                ) : (
+                  <EmptyOrdersState message="You don't have any orders in progress." />
+                )}
+              </div>
+            </TabsContent>
+            <TabsContent value="cooking">
+              <div className="space-y-4 mt-4">
+                {orders.filter((order) => order.order_status === "cooking")
+                  .length > 0 ? (
+                  orders
+                    .filter((order) => order.order_status === "cooking")
+                    .map((order) => <OrderCard key={order.id} order={order} />)
+                ) : (
+                  <EmptyOrdersState message="You don't have any orders in progress." />
+                )}
+              </div>
+            </TabsContent>
+            <TabsContent value="Ready">
+              <div className="space-y-4 mt-4">
+                {orders.filter((order) => order.order_status === "ready")
+                  .length > 0 ? (
+                  orders
+                    .filter((order) => order.order_status === "ready")
                     .map((order) => <OrderCard key={order.id} order={order} />)
                 ) : (
                   <EmptyOrdersState message="You don't have any orders in progress." />
@@ -155,10 +123,10 @@ export default function OrdersPage() {
 
             <TabsContent value="completed">
               <div className="space-y-4 mt-4">
-                {mockOrders.filter((order) => order.status === "completed")
+                {orders.filter((order) => order.order_status === "completed")
                   .length > 0 ? (
-                  mockOrders
-                    .filter((order) => order.status === "completed")
+                  orders
+                    .filter((order) => order.order_status === "completed")
                     .map((order) => <OrderCard key={order.id} order={order} />)
                 ) : (
                   <EmptyOrdersState message="You don't have any completed orders yet." />
@@ -173,13 +141,7 @@ export default function OrdersPage() {
 }
 
 interface OrderCardProps {
-  order: {
-    id: string;
-    date: string;
-    status: string;
-    total: number;
-    items: { name: string; quantity: number; price: number }[];
-  };
+  order: Order;
 }
 
 function OrderCard({ order }: OrderCardProps) {
@@ -218,32 +180,34 @@ function OrderCard({ order }: OrderCardProps) {
           <div>
             <CardTitle className="text-lg">{order.id}</CardTitle>
             <CardDescription>
-              {new Date(order.date).toLocaleDateString()} at{" "}
-              {new Date(order.date).toLocaleTimeString()}
+              {new Date(order.created_at).toLocaleDateString()} at{" "}
+              {new Date(order.created_at).toLocaleTimeString()}
             </CardDescription>
           </div>
-          {getStatusBadge(order.status)}
+          {getStatusBadge(order.order_status)}
         </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
           <div className="text-sm text-muted-foreground">
-            {order.items.slice(0, 2).map((item, index) => (
+            {order.order_items.slice(0, 2).map((item, index) => (
               <div key={index} className="flex justify-between">
                 <span>
-                  {item.quantity}x {item.name}
+                  {item.quantity}x {item.menu.name}
                 </span>
-                <span>${item.price.toFixed(2)}</span>
+                <span>{formatRupiah(item.price * item.quantity)}</span>
               </div>
             ))}
-            {order.items.length > 2 && (
+            {order.order_items.length > 2 && (
               <div className="text-sm text-muted-foreground">
-                +{order.items.length - 2} more items
+                +{order.order_items.length - 2} more items
               </div>
             )}
           </div>
           <div className="flex justify-between items-center pt-2 border-t mt-2">
-            <div className="font-medium">Total: ${order.total.toFixed(2)}</div>
+            <div className="font-medium">
+              Total: {formatRupiah(order.total_amount)}
+            </div>
             <Link href={`/orders/${order.id}`}>
               <Button
                 variant="ghost"

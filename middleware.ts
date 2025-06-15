@@ -7,16 +7,19 @@ export async function middleware(request: NextRequest) {
     req: request,
     secret: process.env.NEXTAUTH_SECRET,
   });
+  // console.log("User Token:", token);
 
-  console.log(`User ${token?.email || "anonymous"} accessing ${pathname}`);
+  // console.log(`User ${token?.email || "anonymous"} accessing ${pathname}`);
 
   // Route configurations
   const routes = {
     public: ["/"],
     auth: ["/login", "/register"],
-    protected: ["/dashboard", "/profile"],
+    protected: ["/profile", "/kitchen", "/cashier"],
     admin: ["/admin"],
     customer: ["/orders", "/menu"],
+    kitchen: ["/kitchen"],
+    cashier: ["/cashier"],
   };
 
   // Check route types
@@ -42,15 +45,15 @@ export async function middleware(request: NextRequest) {
       case "customer":
         return "/menu";
       default:
-        return "/dashboard";
+        return "/";
     }
   }
   // Redirect authenticated users away from auth pages
   if (isAuthRoute && token) {
+    console.log("Redirecting from auth route:", pathname, "Role:", token.role);
     const roleBasedRedirect = getRoleBasedRedirect(token.role);
     return NextResponse.redirect(new URL(roleBasedRedirect, request.url));
   }
-
   // All protected routes require authentication
   const requiresAuth = isProtectedRoute || isAdminRoute || isCustomerRoute;
 

@@ -3,7 +3,6 @@
 import type React from "react";
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ChefHat, ArrowLeft } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -28,7 +27,9 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 // Zod schema for validation
 const registerSchema = z
@@ -109,9 +110,23 @@ export default function RegisterPage() {
           "Registration successful, but auto sign-in failed. Please sign in manually."
         );
       } else {
-        // Successful registration and sign in
-        router.push("/dashboard");
-        router.refresh();
+        toast.success("Login successful");
+        // Ambil session setelah berhasil login
+        const session = await getSession();
+
+        const role = session?.user?.role;
+        console.log("Role:", role);
+
+        // Redirect sesuai role
+        if (role === "admin") {
+          router.push("/admin");
+        } else if (role === "cashier") {
+          router.push("/cashier");
+        } else if (role === "kitchen") {
+          router.push("/kitchen");
+        } else if (role === "customer") {
+          router.push("/menu");
+        }
       }
     } catch (error) {
       console.log(error);

@@ -148,7 +148,7 @@ export default function UserManagement() {
 
   const handleRoleChange = async (userId: number, newRole: Role) => {
     try {
-      const response = await fetch(`/api/users/${userId}/role`, {
+      const response = await fetch(`/api/users/${userId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
