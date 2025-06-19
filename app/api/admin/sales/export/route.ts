@@ -2,7 +2,45 @@
 import prisma from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 
-// Define the same APIOrder type as in the main route
+// Define the Prisma result type (what we actually get from the database)
+type PrismaOrderResult = {
+  id: string;
+  customer_id: string;
+  table_number: number;
+  order_status: string;
+  payment_status: string;
+  total_amount: number;
+  order_time: Date; // This is Date from Prisma
+  completed_time: Date | null; // This is Date from Prisma
+  kasir_id: string | null;
+  created_at: Date;
+  updated_at: Date;
+  customer: {
+    id: string;
+    name: string | null;
+    email: string;
+  };
+  order_items: {
+    id: string;
+    order_id: string;
+    menu_id: string;
+    price: number;
+    quantity: number;
+    subtotal: number;
+    customization: string | null;
+    menu: {
+      id: string;
+      name: string;
+      category_id: string;
+      category: {
+        id: string;
+        name: string;
+      } | null;
+    };
+  }[];
+};
+
+// Define the API Order type for processing
 interface APIOrder {
   id: string;
   customer_id: string;
@@ -40,13 +78,22 @@ interface APIOrder {
   }[];
 }
 
+// Helper function to convert Prisma result to API format
+function convertToAPIOrder(order: PrismaOrderResult): APIOrder {
+  return {
+    ...order,
+    order_time: order.order_time.toISOString(),
+    completed_time: order.completed_time?.toISOString() || null,
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { type, startDate, endDate } = body;
 
     // Fetch orders for the specified date range
-    const orders = await prisma.order.findMany({
+    const ordersFromDb = await prisma.order.findMany({
       where: {
         payment_status: "paid",
         order_status: "completed",
@@ -78,12 +125,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Convert to API format
+    const orders = ordersFromDb.map(convertToAPIOrder);
+
     // Process the data based on type
     let reportData;
     if (type === "daily") {
-      reportData = processDailySales(orders as APIOrder[]);
+      reportData = processDailySales(orders);
     } else {
-      reportData = processWeeklySales(orders as APIOrder[]);
+      reportData = processWeeklySales(orders);
     }
 
     // Calculate summary for the export
@@ -126,7 +176,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Helper function to process daily sales (same as main route)
+// Helper function to process daily sales
 function processDailySales(orders: APIOrder[]) {
   const dailyData = new Map<
     string,
@@ -173,7 +223,7 @@ function processDailySales(orders: APIOrder[]) {
   return result.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-// Helper function to process weekly sales (same as main route)
+// Helper function to process weekly sales
 function processWeeklySales(orders: APIOrder[]) {
   const weeklyData = new Map<
     string,

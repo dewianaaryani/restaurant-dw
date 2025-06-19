@@ -12,10 +12,11 @@ enum Role {
 // PATCH /api/users/[id]/role - Update user role
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = params.id;
+    const { id } = await params;
+    const userId = id;
 
     const body = await request.json();
     const { role } = body;
@@ -87,10 +88,11 @@ export async function PATCH(
 // GET /api/users/[id]/role - Get user role (optional)
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = params.id;
+    const { id } = await params;
+    const userId = id;
 
     const user = await prisma.user.findUnique({
       where: { id: userId },

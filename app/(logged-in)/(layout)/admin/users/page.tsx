@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,8 +92,8 @@ export default function UserManagement() {
     totalPages: 0,
   });
 
-  // Fetch users from API
-  const fetchUsers = async () => {
+  // Memoize fetchUsers to prevent unnecessary re-renders
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams({
@@ -118,12 +118,12 @@ export default function UserManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, searchTerm, selectedRole]);
 
   // Initial fetch and refetch when filters change
   useEffect(() => {
     fetchUsers();
-  }, [page, searchTerm, selectedRole]);
+  }, [fetchUsers]);
 
   // Debounce search
   useEffect(() => {
@@ -234,7 +234,6 @@ export default function UserManagement() {
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline">Active Only</Button>
           </div>
         </CardContent>
       </Card>

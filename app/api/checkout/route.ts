@@ -3,18 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { Prisma } from "@prisma/client";
-
-interface CheckoutItem {
-  id: string;
-  name: string;
-  price: number;
-  quantity: number;
-  customization?: string;
-}
+import { OrderItem } from "@/types";
 
 interface CheckoutRequest {
   tableNumber: number;
-  items: CheckoutItem[];
+  items: OrderItem[];
 }
 
 // Types for database models
@@ -24,29 +17,6 @@ type MenuItemWithAvailability = {
   price: number;
   is_available: boolean;
 };
-
-type OrderWithDetails = Prisma.OrderGetPayload<{
-  include: {
-    order_items: {
-      include: {
-        menu: true;
-      };
-    };
-    customer: {
-      select: {
-        id: true;
-        name: true;
-        email: true;
-      };
-    };
-  };
-}>;
-
-type OrderItemWithMenu = Prisma.OrderItemGetPayload<{
-  include: {
-    menu: true;
-  };
-}>;
 
 export async function POST(request: NextRequest) {
   try {
@@ -218,7 +188,7 @@ export async function POST(request: NextRequest) {
           order_status: order.order_status,
           payment_status: order.payment_status,
           order_time: order.order_time,
-          items: order.order_items.map((item: OrderItemWithMenu) => ({
+          items: order.order_items.map((item: OrderItem) => ({
             id: item.id,
             menu_name: item.menu.name,
             quantity: item.quantity,

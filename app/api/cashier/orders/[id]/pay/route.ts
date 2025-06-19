@@ -4,15 +4,15 @@ import prisma from "@/lib/db";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
 
   if (!session || session.user.role !== "cashier") {
     return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
   }
-
-  const orderId = params.id;
+  const { id } = await params;
+  const orderId = id;
 
   try {
     const updatedOrder = await prisma.order.update({

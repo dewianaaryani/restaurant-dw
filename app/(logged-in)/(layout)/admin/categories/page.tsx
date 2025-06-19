@@ -328,7 +328,7 @@ export default function CategoryManagement() {
                 <FolderOpen className="h-5 w-5 text-orange-600" />
                 <CardTitle className="text-lg">{category.name}</CardTitle>
               </div>
-              <Badge variant="secondary">{category.menuCount} items</Badge>
+              <Badge variant="secondary">{category.menuCount ?? 0} items</Badge>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">
@@ -398,7 +398,7 @@ export default function CategoryManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {categories.reduce((sum, cat) => sum + cat.menuCount, 0)}
+              {categories.reduce((sum, cat) => sum + (cat.menuCount ?? 0), 0)}
             </div>
             <p className="text-xs text-muted-foreground">
               Across all categories
@@ -415,7 +415,7 @@ export default function CategoryManagement() {
           <CardContent>
             <div className="text-2xl font-bold">
               {categories.length > 0
-                ? Math.max(...categories.map((cat) => cat.menuCount))
+                ? Math.max(...categories.map((cat) => cat.menuCount ?? 0))
                 : 0}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -432,8 +432,10 @@ export default function CategoryManagement() {
             <div className="text-2xl font-bold">
               {categories.length > 0
                 ? Math.round(
-                    categories.reduce((sum, cat) => sum + cat.menuCount, 0) /
-                      categories.length
+                    categories.reduce(
+                      (sum, cat) => sum + (cat.menuCount ?? 0),
+                      0
+                    ) / categories.length
                   )
                 : 0}
             </div>
@@ -450,13 +452,13 @@ export default function CategoryManagement() {
             <AlertDialogDescription>
               This will permanently delete the category &ldquo;
               {categoryToDelete?.name}&rdquo;.
-              {categoryToDelete && categoryToDelete.menuCount > 0 && (
+              {categoryToDelete && (categoryToDelete.menuCount ?? 0) > 0 && (
                 <span className="text-red-600 block mt-2 font-medium">
-                  ⚠️ This category has {categoryToDelete.menuCount} menu items.
-                  Please remove them first before deleting the category.
+                  ⚠️ This category has {categoryToDelete.menuCount ?? 0} menu
+                  items. Please remove them first before deleting the category.
                 </span>
               )}
-              {categoryToDelete && categoryToDelete.menuCount === 0 && (
+              {categoryToDelete && (categoryToDelete.menuCount ?? 0) === 0 && (
                 <span className="block mt-2">
                   This action cannot be undone.
                 </span>
@@ -469,10 +471,10 @@ export default function CategoryManagement() {
               onClick={handleDeleteConfirm}
               className="bg-red-600 hover:bg-red-700"
               disabled={
-                categoryToDelete ? categoryToDelete.menuCount > 0 : false
+                categoryToDelete ? (categoryToDelete.menuCount ?? 0) > 0 : false
               }
             >
-              {categoryToDelete && categoryToDelete.menuCount > 0
+              {categoryToDelete && (categoryToDelete.menuCount ?? 0) > 0
                 ? "Cannot Delete"
                 : "Delete"}
             </AlertDialogAction>

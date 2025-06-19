@@ -2,7 +2,45 @@
 import prisma from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 
-// Define the Order type for this API (without the full Order interface requirements)
+// Define the Prisma result type (what we actually get from the database)
+type PrismaOrderResult = {
+  id: string;
+  customer_id: string;
+  table_number: number;
+  order_status: string;
+  payment_status: string;
+  total_amount: number;
+  order_time: Date; // This is Date from Prisma
+  completed_time: Date | null; // This is Date from Prisma
+  kasir_id: string | null;
+  created_at: Date;
+  updated_at: Date;
+  customer: {
+    id: string;
+    name: string | null;
+    email: string;
+  };
+  order_items: {
+    id: string;
+    order_id: string;
+    menu_id: string;
+    price: number;
+    quantity: number;
+    subtotal: number;
+    customization: string | null;
+    menu: {
+      id: string;
+      name: string;
+      category_id: string;
+      category: {
+        id: string;
+        name: string;
+      } | null;
+    };
+  }[];
+};
+
+// Define the API Order type for processing
 interface APIOrder {
   id: string;
   customer_id: string;
@@ -40,6 +78,15 @@ interface APIOrder {
   }[];
 }
 
+// Helper function to convert Prisma result to API format
+function convertToAPIOrder(order: PrismaOrderResult): APIOrder {
+  return {
+    ...order,
+    order_time: order.order_time.toISOString(),
+    completed_time: order.completed_time?.toISOString() || null,
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -52,7 +99,7 @@ export async function GET(request: NextRequest) {
     startDate.setDate(endDate.getDate() - days);
 
     // Fetch orders with related data
-    const orders = await prisma.order.findMany({
+    const ordersFromDb = await prisma.order.findMany({
       where: {
         payment_status: "paid",
         order_status: "completed",
@@ -84,6 +131,9 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    // Convert to API format
+    const orders = ordersFromDb.map(convertToAPIOrder);
+
     // Calculate summary statistics
     const totalRevenue = orders.reduce(
       (sum, order) => sum + order.total_amount,
@@ -97,9 +147,9 @@ export async function GET(request: NextRequest) {
     // Process data based on type
     let salesData;
     if (type === "daily") {
-      salesData = processDailySales(orders as APIOrder[]);
+      salesData = processDailySales(orders);
     } else {
-      salesData = processWeeklySales(orders as APIOrder[]);
+      salesData = processWeeklySales(orders);
     }
 
     return NextResponse.json({
