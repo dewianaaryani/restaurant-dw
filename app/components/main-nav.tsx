@@ -91,12 +91,36 @@ export function MainNav() {
                     </div>
                     <DropdownMenuSeparator />
 
-                    <DropdownMenuItem asChild>
-                      <Link href="/orders">
-                        <ShoppingBag className="mr-2 h-4 w-4" />
-                        <span>My Orders</span>
-                      </Link>
-                    </DropdownMenuItem>
+                    {user.role === "admin" ? (
+                      <DropdownMenuItem asChild>
+                        <Link href="/admin">
+                          <ShoppingBag className="mr-2 h-4 w-4" />
+                          <span>Dashboard</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    ) : user.role === "kitchen" ? (
+                      <DropdownMenuItem asChild>
+                        <Link href="/kitchen">
+                          <ShoppingBag className="mr-2 h-4 w-4" />
+                          <span>Kitchen Panel</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    ) : user.role === "cashier" ? (
+                      <DropdownMenuItem asChild>
+                        <Link href="/cashier">
+                          <ShoppingBag className="mr-2 h-4 w-4" />
+                          <span>Cashier Panel</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem asChild>
+                        <Link href="/orders">
+                          <ShoppingBag className="mr-2 h-4 w-4" />
+                          <span>My Orders</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
+
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={async () => await signOut()}>
                       <LogOut className="mr-2 h-4 w-4" />

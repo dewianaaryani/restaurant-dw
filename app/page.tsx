@@ -3,10 +3,7 @@ import {
   Clock,
   MapPin,
   Phone,
-  Star,
   ChefHat,
-  Users,
-  Award,
   UtensilsCrossed,
   ChevronDown,
 } from "lucide-react";
@@ -16,13 +13,6 @@ import { MainNav } from "./components/main-nav";
 import { Badge } from "@/components/ui/badge";
 
 export default function HomePage() {
-  const stats = [
-    { icon: ChefHat, label: "Expert Chefs", value: "15+" },
-    { icon: Users, label: "Happy Customers", value: "10K+" },
-    { icon: Award, label: "Awards Won", value: "25+" },
-    { icon: Star, label: "Average Rating", value: "4.8" },
-  ];
-
   return (
     <div className="min-h-screen">
       {/* Navigation */}
@@ -97,25 +87,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section className="py-16 bg-white">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {stats.map((stat, index) => (
-              <div key={index} className="text-center">
-                <div className="inline-flex items-center justify-center w-12 h-12 bg-orange-100 rounded-lg mb-4">
-                  <stat.icon className="h-6 w-6 text-orange-600" />
-                </div>
-                <div className="text-3xl font-bold text-gray-900 mb-2">
-                  {stat.value}
-                </div>
-                <div className="text-gray-600">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* About Section */}
       <section id="about" className="py-16 bg-white">
         <div className="container mx-auto px-4">
@@ -135,9 +106,6 @@ export default function HomePage() {
                 memorable dining experiences that celebrate both traditional
                 flavors and modern culinary artistry.
               </p>
-              <Button className="bg-orange-600 hover:bg-orange-700">
-                Learn More About Us
-              </Button>
             </div>
             <div className="relative h-96">
               <div className="relative w-full h-96 rounded-lg overflow-hidden">
